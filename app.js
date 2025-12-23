@@ -95,22 +95,26 @@ function fmtSpeed(speedKmh) {
  * Gör Leaflet-icon för pilen.
  * Bearing roteras i wrappern (grad).
  */
-function makeArrowIcon(line, bearingDeg) {
+function makeArrowIcon(line, bearingDeg, hasBearing) {
   const color = colorForLine(line);
 
-  // Om bearing saknas: visa cirkel
-  if (bearingDeg == null || !Number.isFinite(bearingDeg)) {
+  // Om vi inte har en riktig bearing än: visa en cirkel
+  if (!hasBearing) {
+    const html = `
+      <div class="trainMarker">
+        <div class="trainDot" style="background:${color}"></div>
+      </div>
+    `;
     return L.divIcon({
       className: "trainIconWrap",
-      html: `<div class="trainMarker">${circleSvg(color)}</div>`,
+      html,
       iconSize: [18, 18],
       iconAnchor: [9, 9]
     });
   }
 
-  // Din pil-SVG pekar “upp” från start → om den pekar 90° fel, justera här:
-  // Testa bearingDeg - 90 (vanligast) eller bearingDeg + 90 beroende på din SVG.
-  const rot = bearingDeg + 90;
+  // SVG-pilen pekar åt höger från början -> -90 för GTFS (0=norr)
+  const rot = (bearingDeg ?? 0) - 90;
 
   const html = `
     <div class="trainMarker" style="transform: rotate(${rot}deg);">
