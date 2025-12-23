@@ -1,3 +1,5 @@
+import { TRIP_TO_LINE } from "./data/trip_to_line.js";
+
 const API_URL = "https://metro.etfnordic.workers.dev";
 
 const map = L.map("map").setView([59.3293, 18.0686], 12);
