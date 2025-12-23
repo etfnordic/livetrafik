@@ -5,24 +5,22 @@ html, body { height: 100%; margin: 0; }
 
 .trainMarker { width: 34px; height: 34px; transform-origin: 50% 50%; }
 
-.trainLabelWrap {
-  pointer-events: none;
-}
+.trainLabelWrap { pointer-events: none; }
 
 .trainLabel {
-  transform: translate(-50%, -120%);
+  display: inline-block;
   white-space: nowrap;
 
-  font-weight: 700;           /* FET TEXT */
+  font-weight: 700;
   font-size: 12px;
 
-  padding: 3px 7px;
-  border-radius: 7px;
+  padding: 3px 8px;
+  border-radius: 8px;
 
   background: rgba(255, 255, 255, 0.95);
   color: #111;
   border: 1px solid rgba(0,0,0,0.15);
-
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
+
 
