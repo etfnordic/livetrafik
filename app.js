@@ -10,6 +10,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 const markers = new Map();
 const lastPos = new Map();
+const lastBearing = new Map();
 let timer = null;
 
 /**
@@ -149,14 +150,18 @@ function enrich(v) {
 function upsertTrain(v) {
   const pos = [v.lat, v.lon];
 
-let bearing = Number.isFinite(v.bearing) ? v.bearing : null;
+let bearing = null;
 
-// Om bearing saknas (eller alltid 0 på vissa fordon): räkna ut från rörelse
+// 1) Använd API-bearing bara om den är > 0
+if (Number.isFinite(v.bearing) && v.bearing > 0) {
+  bearing = v.bearing;
+}
+
+// 2) Annars: räkna ut från rörelse
 const prev = lastPos.get(v.id);
-if ((bearing == null || bearing === 0) && prev && prev.lat != null && prev.lon != null) {
-  // kräver att den faktiskt flyttat sig lite, annars blir det brus
+if (bearing == null && prev && prev.lat != null && prev.lon != null) {
   const moved =
-    Math.abs(v.lat - prev.lat) > 0.00002 || // ~2m
+    Math.abs(v.lat - prev.lat) > 0.00002 ||
     Math.abs(v.lon - prev.lon) > 0.00002;
 
   if (moved) {
@@ -164,7 +169,17 @@ if ((bearing == null || bearing === 0) && prev && prev.lat != null && prev.lon !
   }
 }
 
-// spara nuvarande som "förra" till nästa uppdatering
+// 3) Om fortfarande ingen bearing → använd senast kända
+if (bearing == null && lastBearing.has(v.id)) {
+  bearing = lastBearing.get(v.id);
+}
+
+// 4) Spara om vi fick en bearing
+if (bearing != null) {
+  lastBearing.set(v.id, bearing);
+}
+
+// Spara position till nästa uppdatering
 lastPos.set(v.id, { lat: v.lat, lon: v.lon, ts: v.ts ?? Date.now() });
 
 const arrowIcon = makeArrowIcon(v.line, bearing);
@@ -227,6 +242,7 @@ async function refreshLive() {
       map.removeLayer(m.group);
       markers.delete(id);
       lastPos.delete(id);
+      lastBearing.delete(id);
     }
   }
 }
