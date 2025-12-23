@@ -25,7 +25,9 @@ html, body { height: 100%; margin: 0; }
     0 0 0 1px rgba(0,0,0,0.15);
 }
 
-.trainLabelWrap { pointer-events: none; }
+.trainLabelWrap{
+  pointer-events:none;
+}
 
 .trainLabel {
   display: inline-block;
@@ -41,5 +43,10 @@ html, body { height: 100%; margin: 0; }
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
-
+.trainLabelPos{
+  position: relative;
+  transform: translate(-50%, calc(-100% - 10px)); /* 10px gap ovanför tåget */
+  transform-origin: 0 0;
+  display: inline-block;
+}
 
