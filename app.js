@@ -79,6 +79,13 @@ function arrowSvg(fillColor) {
   `;
 }
 
+function circleSvg(color) {
+  return `
+  <svg width="18" height="18" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="38" fill="${color}" stroke="#111" stroke-width="6"/>
+  </svg>`;
+}
+
 function fmtSpeed(speedKmh) {
   if (speedKmh == null || Number.isNaN(speedKmh) || speedKmh < 0) return "";
   return ` • ${Math.round(speedKmh)} km/h`;
@@ -90,14 +97,39 @@ function fmtSpeed(speedKmh) {
  */
 function makeArrowIcon(line, bearingDeg) {
   const color = colorForLine(line);
-  const rot = Number.isFinite(bearingDeg) ? (bearingDeg + 90) : 0;
+
+  // Om bearing saknas: visa cirkel
+  if (bearingDeg == null || !Number.isFinite(bearingDeg)) {
+    return L.divIcon({
+      className: "trainIconWrap",
+      html: `<div class="trainMarker">${circleSvg(color)}</div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+  }
+
+  // Din pil-SVG pekar “upp” från start → om den pekar 90° fel, justera här:
+  // Testa bearingDeg - 90 (vanligast) eller bearingDeg + 90 beroende på din SVG.
+  const rot = bearingDeg + 90;
 
   const html = `
-    <div class="trainMarker" style="
-      transform: rotate(${rot}deg);
-      transform-origin: 17px 17px;
-      width:34px;height:34px;
-    ">
+    <div class="trainMarker" style="transform: rotate(${rot}deg);">
+      ${arrowSvg(color)}
+    </div>
+  `;
+
+  return L.divIcon({
+    className: "trainIconWrap",
+    html,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
+  });
+}
+  // SVG-pilen pekar åt höger från början → -90 för GTFS (0=norr)
+  const rot = (bearingDeg - 90);
+
+  const html = `
+    <div class="trainMarker" style="transform: rotate(${rot}deg);">
       ${arrowSvg(color)}
     </div>
   `;
@@ -115,12 +147,13 @@ function makeArrowIcon(line, bearingDeg) {
  */
 function makeLabelIcon(line, speedKmh) {
   const text = `Linje ${line}${fmtSpeed(speedKmh)}`;
+  const color = colorForLine(line);
 
   return L.divIcon({
     className: "trainLabelWrap",
-    html: `<div class="trainLabel">${text}</div>`,
-    iconSize: [120, 28],     // en fast "yta" så Leaflet placerar korrekt
-    iconAnchor: [60, 40]     // mitten X, och lite ovanför pilen
+    html: `<div class="trainLabel" style="background:${color}">${text}</div>`,
+    iconSize: [160, 34],      // ger plats för texten
+    iconAnchor: [80, 54]      // centrerad + ovanför tåget
   });
 }
 
