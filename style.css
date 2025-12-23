@@ -1,9 +1,29 @@
 html, body { height: 100%; margin: 0; }
 #map { height: 100vh; width: 100%; }
 
-.trainIconWrap, .trainLabelWrap { background: transparent; border: none; }
+/* Wrapper runt alla tåg-ikoner */
+.trainIconWrap {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+}
 
-.trainMarker { width: 34px; height: 34px; transform-origin: 50% 50%; }
+/* Pilar */
+.trainMarker svg {
+  overflow: visible;
+}
+
+/* Cirkeln innan riktning finns */
+.trainDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 3px solid #111;
+  box-sizing: border-box;
+
+  /* Skugga */
+  box-shadow:
+    0 2px 6px rgba(0,0,0,0.45),
+    0 0 0 1px rgba(0,0,0,0.15);
+}
 
 .trainLabelWrap { pointer-events: none; }
 
