@@ -32,7 +32,7 @@ html, body { height: 100%; margin: 0; }
 .trainLabel {
   display: inline-block;
   white-space: nowrap;
-  font-weight: 400;
+  font-weight: 600;
   font-size: 12px;
 
   padding: 4px 8px;
@@ -45,7 +45,7 @@ html, body { height: 100%; margin: 0; }
 
 .trainLabelPos{
   position: relative;
-  transform: translate(-50%, calc(-100% - 10px)); /* 10px gap ovanför tåget */
+  transform: translate(-50%, calc(-100% - 12px)); /* 10px gap ovanför tåget */
   transform-origin: 0 0;
   display: inline-block;
 }
