@@ -229,7 +229,7 @@ function upsertTrain(v) {
 
   const arrowIcon = makeArrowIcon(v.line, Number.isFinite(bearing) ? bearing : NaN);
   const labelText = v.headsign
-    ? `${v.line} → ${v.headsign}`
+    ? `${v.line} ▸ ${v.headsign}`
     : v.line;
 
   const labelIcon = makeLabelIcon(
