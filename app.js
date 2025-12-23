@@ -11,13 +11,23 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 const markers = new Map();
 const lastPos = new Map();      // {lat, lon, ts}
 const lastBearing = new Map();  // bearingDeg
+const bearingEstablished = new Map(); // boolean per train id
+
 let timer = null;
 
+function normalizeLine(rawLine) {
+  const s = String(rawLine ?? "").trim();
+
+  // Ex: "Linje 40" -> "40", "Line 43X" -> "43X", "  27S " -> "27S"
+  const m = s.match(/(\d+\s*[A-Z]+|\d+)/i);
+  return (m ? m[1] : s).replace(/\s+/g, "").toUpperCase();
+}
 /**
  * Linjefärger enligt din specifikation.
  */
 function colorForLine(line) {
-  const l = String(line ?? "").toUpperCase().trim();
+  const l = normalizeLine(line);
+  // ...resten oförändrad
 
   // Tunnelbana / Spårväg m.m.
   if (l === "7") return "#878C85";                 // grå
@@ -182,16 +192,21 @@ function enrich(v) {
  * Skapa/uppdatera marker-grupp för ett fordon
  */
 function upsertTrain(v) {
+  // Normalisera linjen tidigt så allt (färg + label) matchar
+  v.line = normalizeLine(v.line);
+
   const pos = [v.lat, v.lon];
 
   let bearing = null;
+  let establishedNow = false;
 
   // 1) Använd API-bearing om den är giltig och > 0
   if (Number.isFinite(v.bearing) && v.bearing > 0) {
     bearing = v.bearing;
+    establishedNow = true;
   }
 
-  // 2) Annars: räkna ut från rörelse
+  // 2) Annars: räkna ut från rörelse (senaste två positionerna)
   const prev = lastPos.get(v.id);
   if (bearing == null && prev && prev.lat != null && prev.lon != null) {
     const moved =
@@ -200,17 +215,23 @@ function upsertTrain(v) {
 
     if (moved) {
       bearing = headingFromPoints(prev.lat, prev.lon, v.lat, v.lon);
+      establishedNow = true;
     }
   }
 
-  // 3) Om fortfarande ingen bearing: använd senast kända (så den inte hoppar tillbaka norr)
-  if (bearing == null && lastBearing.has(v.id)) {
-    bearing = lastBearing.get(v.id);
+  // Markera som etablerad om vi fick bearing nu
+  if (establishedNow) {
+    bearingEstablished.set(v.id, true);
+    lastBearing.set(v.id, bearing);
   }
 
-  // 4) Spara bearing om vi har den
-  if (bearing != null) {
-    lastBearing.set(v.id, bearing);
+  // 3) Efter att bearing väl är etablerad: återanvänd senast kända om vi inte får en ny
+  if (
+    bearing == null &&
+    bearingEstablished.get(v.id) === true &&
+    lastBearing.has(v.id)
+  ) {
+    bearing = lastBearing.get(v.id);
   }
 
   // Spara position till nästa uppdatering
@@ -218,6 +239,9 @@ function upsertTrain(v) {
 
   const arrowIcon = makeArrowIcon(v.line, Number.isFinite(bearing) ? bearing : NaN);
   const labelIcon = makeLabelIcon(v.line, v.speedKmh);
+
+  // ...resten av upsertTrain oförändrad
+
 
   if (!markers.has(v.id)) {
     const group = L.layerGroup();
@@ -275,6 +299,7 @@ async function refreshLive() {
       markers.delete(id);
       lastPos.delete(id);
       lastBearing.delete(id);
+      bearingEstablished.delete(id);
     }
   }
 }
