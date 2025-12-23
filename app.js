@@ -72,7 +72,7 @@ function fmtSpeed(speedKmh) {
  */
 function makeArrowIcon(line, bearingDeg) {
   const color = colorForLine(line);
-  const rot = Number.isFinite(bearingDeg) ? (bearingDeg - 90) : 0;
+  const rot = Number.isFinite(bearingDeg) ? (bearingDeg + 90) : 0;
 
   const html = `
     <div class="trainMarker" style="
