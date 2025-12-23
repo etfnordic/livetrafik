@@ -19,24 +19,24 @@ function colorForLine(line) {
   const l = String(line ?? "").toUpperCase().trim();
 
   // Tunnelbana m.m.
-  if (l === "7") return "#6B7280";           // grå
-  if (l === "10" || l === "11") return "#2563EB"; // blå
-  if (l === "12") return "#D1D5DB";         // ljusgrå
-  if (l === "13" || l === "14") return "#DC2626"; // röd
-  if (l === "17" || l === "18" || l === "19") return "#16A34A"; // grön
-  if (l === "21") return "#7C4A1D";         // brun
-  if (l === "25" || l === "26") return "#14B8A6"; // turkos
+  if (l === "7") return "#878C85";           // grå
+  if (l === "10" || l === "11") return "#0091D2"; // blå
+  if (l === "12") return "#738BA4";         // ljusgrå
+  if (l === "13" || l === "14") return "#E31F26"; // röd
+  if (l === "17" || l === "18" || l === "19") return "#00B259"; // grön
+  if (l === "21") return "#B76934";         // brun
+  if (l === "25" || l === "26") return "#21B6BA"; // turkos
 
   // Roslagsbanan (inkl express)
   if (l === "27" || l === "27S" || l === "28" || l === "28S" || l === "29")
-    return "#7C3AED"; // lila
+    return "#A86DAE"; // lila
 
   // Tvärbana
-  if (l === "30" || l === "31") return "#F97316"; // orange
+  if (l === "30" || l === "31") return "#E08A32"; // orange
 
   // Pendeltåg (inkl express)
   if (l === "40" || l === "41" || l === "43" || l === "43X" || l === "48")
-    return "#EC4899"; // rosa
+    return "#ED66A5"; // rosa
 
   // fallback
   return "#111827";
