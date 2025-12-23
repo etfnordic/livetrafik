@@ -1,6 +1,6 @@
 import { TRIP_TO_LINE } from "./data/trip_to_line.js";
 
-const API_URL = "https://metro.etfnordic.workers.dev"; // din worker root som returnerar array
+const API_URL = "https://metro.etfnordic.workers.dev"; // worker root (returnerar array)
 
 const map = L.map("map").setView([59.3293, 18.0686], 12);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -9,43 +9,43 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 const markers = new Map();
-const lastPos = new Map();
-const lastBearing = new Map();
+const lastPos = new Map();      // {lat, lon, ts}
+const lastBearing = new Map();  // bearingDeg
 let timer = null;
 
 /**
  * Linjefärger enligt din specifikation.
- * (Du kan byta hex om du vill finjustera nyanser.)
  */
 function colorForLine(line) {
   const l = String(line ?? "").toUpperCase().trim();
 
-  // Tunnelbana m.m.
-  if (l === "7") return "#878C85";           // grå
-  if (l === "10" || l === "11") return "#0091D2"; // blå
-  if (l === "12") return "#738BA4";         // ljusgrå
-  if (l === "13" || l === "14") return "#E31F26"; // röd
+  // Tunnelbana / Spårväg m.m.
+  if (l === "7") return "#878C85";                 // grå
+  if (l === "10" || l === "11") return "#0091D2";  // blå
+  if (l === "12") return "#738BA4";                // ljusgrå
+  if (l === "13" || l === "14") return "#E31F26";  // röd
   if (l === "17" || l === "18" || l === "19") return "#00B259"; // grön
-  if (l === "21") return "#B76934";         // brun
-  if (l === "25" || l === "26") return "#21B6BA"; // turkos
+  if (l === "21") return "#B76934";                // brun
+  if (l === "25" || l === "26") return "#21B6BA";  // turkos
 
   // Roslagsbanan (inkl express)
   if (l === "27" || l === "27S" || l === "28" || l === "28S" || l === "29")
     return "#A86DAE"; // lila
 
   // Tvärbana
-  if (l === "30" || l === "31") return "#E08A32"; // orange
+  if (l === "30" || l === "31") return "#E08A32";  // orange
 
   // Pendeltåg (inkl express)
   if (l === "40" || l === "41" || l === "43" || l === "43X" || l === "48")
     return "#ED66A5"; // rosa
 
-  // fallback
   return "#111827";
 }
 
+/**
+ * Heading 0..360 (0=norr, 90=öst)
+ */
 function headingFromPoints(lat1, lon1, lat2, lon2) {
-  // Returnerar grader 0..360 (0 = norr, 90 = öst)
   const toRad = (d) => (d * Math.PI) / 180;
   const toDeg = (r) => (r * 180) / Math.PI;
 
@@ -61,11 +61,9 @@ function headingFromPoints(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Fylld “pil”-SVG (enkel och tydlig).
- * Roteras via wrapper-diven.
+ * Pil-SVG (fylld).
  */
 function arrowSvg(fillColor) {
-  // En "pappersflygplan/pil"-form som syns bra även liten
   return `
     <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -85,19 +83,41 @@ function fmtSpeed(speedKmh) {
 }
 
 /**
- * Gör Leaflet-icon för pilen.
- * Bearing roteras i wrappern (grad).
+ * Icon: cirkel (innan bearing) eller pil (när bearing finns).
+ * Skugga via filter: drop-shadow.
  */
 function makeArrowIcon(line, bearingDeg) {
   const color = colorForLine(line);
-  const rot = Number.isFinite(bearingDeg) ? (bearingDeg + 90) : 0;
+
+  // Ingen bearing => cirkel
+  if (!Number.isFinite(bearingDeg)) {
+    const html = `
+      <div class="trainMarker" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
+        <div class="trainDot" style="
+          width: 16px; height: 16px;
+          border-radius: 999px;
+          background: ${color};
+          border: 2px solid #111;
+        "></div>
+      </div>
+    `;
+    return L.divIcon({
+      className: "trainIconWrap",
+      html,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+  }
+
+  // SVG-pilen pekar åt höger från början → -90 för GTFS (0=norr)
+  const rot = bearingDeg - 90;
 
   const html = `
-    <div class="trainMarker" style="
-      transform: rotate(${rot}deg);
-      transform-origin: 17px 17px;
-      width:34px;height:34px;
-    ">
+    <div class="trainMarker"
+      style="
+        transform: rotate(${rot}deg);
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
+      ">
       ${arrowSvg(color)}
     </div>
   `;
@@ -111,16 +131,31 @@ function makeArrowIcon(line, bearingDeg) {
 }
 
 /**
- * Label ovanför pilen: "Linje 14 • 45 km/h"
+ * Label ovanför tåget: "14 • 45 km/h"
+ * Bakgrund = linjens färg
+ * Centrerad ovanför
  */
 function makeLabelIcon(line, speedKmh) {
-  const text = `Linje ${line}${fmtSpeed(speedKmh)}`;
+  const text = `${line}${fmtSpeed(speedKmh)}`;
+  const color = colorForLine(line);
 
   return L.divIcon({
     className: "trainLabelWrap",
-    html: `<div class="trainLabel">${text}</div>`,
-    iconSize: [120, 28],     // en fast "yta" så Leaflet placerar korrekt
-    iconAnchor: [60, 40]     // mitten X, och lite ovanför pilen
+    html: `
+      <div class="trainLabel" style="
+        background:${color};
+        color:#fff;
+        font-weight:700;
+        padding:6px 10px;
+        border-radius:999px;
+        border:2px solid rgba(0,0,0,.5);
+        box-shadow: 0 2px 6px rgba(0,0,0,.25);
+        white-space: nowrap;
+        display: inline-block;
+      ">${text}</div>
+    `,
+    iconSize: [180, 34],
+    iconAnchor: [90, 54] // centrerad + ovanför
   });
 }
 
@@ -133,8 +168,7 @@ function enrich(v) {
   const info = TRIP_TO_LINE[v.tripId];
   if (!info?.line) return null;
 
-  // Om du vill vara extra hård: filtrera bara dessa typer
-  // (du kan ta bort detta om du redan har 100/401/900 i kartan)
+  // Vill du filtrera hårt på typer (som dina GTFS route_type: 100/401/900)
   if (info.type != null && ![100, 401, 900].includes(info.type)) return null;
 
   return {
@@ -150,46 +184,44 @@ function enrich(v) {
 function upsertTrain(v) {
   const pos = [v.lat, v.lon];
 
-let bearing = null;
+  let bearing = null;
 
-// 1) Använd API-bearing bara om den är > 0
-if (Number.isFinite(v.bearing) && v.bearing > 0) {
-  bearing = v.bearing;
-}
-
-// 2) Annars: räkna ut från rörelse
-const prev = lastPos.get(v.id);
-if (bearing == null && prev && prev.lat != null && prev.lon != null) {
-  const moved =
-    Math.abs(v.lat - prev.lat) > 0.00002 ||
-    Math.abs(v.lon - prev.lon) > 0.00002;
-
-  if (moved) {
-    bearing = headingFromPoints(prev.lat, prev.lon, v.lat, v.lon);
+  // 1) Använd API-bearing om den är giltig och > 0
+  if (Number.isFinite(v.bearing) && v.bearing > 0) {
+    bearing = v.bearing;
   }
-}
 
-// 3) Om fortfarande ingen bearing → använd senast kända
-if (bearing == null && lastBearing.has(v.id)) {
-  bearing = lastBearing.get(v.id);
-}
+  // 2) Annars: räkna ut från rörelse
+  const prev = lastPos.get(v.id);
+  if (bearing == null && prev && prev.lat != null && prev.lon != null) {
+    const moved =
+      Math.abs(v.lat - prev.lat) > 0.00002 ||
+      Math.abs(v.lon - prev.lon) > 0.00002;
 
-// 4) Spara om vi fick en bearing
-if (bearing != null) {
-  lastBearing.set(v.id, bearing);
-}
+    if (moved) {
+      bearing = headingFromPoints(prev.lat, prev.lon, v.lat, v.lon);
+    }
+  }
 
-// Spara position till nästa uppdatering
-lastPos.set(v.id, { lat: v.lat, lon: v.lon, ts: v.ts ?? Date.now() });
+  // 3) Om fortfarande ingen bearing: använd senast kända (så den inte hoppar tillbaka norr)
+  if (bearing == null && lastBearing.has(v.id)) {
+    bearing = lastBearing.get(v.id);
+  }
 
-const arrowIcon = makeArrowIcon(v.line, bearing);
+  // 4) Spara bearing om vi har den
+  if (bearing != null) {
+    lastBearing.set(v.id, bearing);
+  }
 
+  // Spara position till nästa uppdatering
+  lastPos.set(v.id, { lat: v.lat, lon: v.lon, ts: v.ts ?? Date.now() });
+
+  const arrowIcon = makeArrowIcon(v.line, Number.isFinite(bearing) ? bearing : NaN);
   const labelIcon = makeLabelIcon(v.line, v.speedKmh);
 
   if (!markers.has(v.id)) {
     const group = L.layerGroup();
 
-    // Label lite ovanför markören
     const labelMarker = L.marker(pos, {
       icon: labelIcon,
       interactive: false,
@@ -230,7 +262,7 @@ async function refreshLive() {
     if (!raw?.id || raw.lat == null || raw.lon == null) continue;
 
     const v = enrich(raw);
-    if (!v) continue; // okänd trip -> visas inte
+    if (!v) continue;
 
     seen.add(v.id);
     upsertTrain(v);
