@@ -5,7 +5,9 @@ const API_URL = "https://metro.etfnordic.workers.dev"; // worker root (returnera
 const map = L.map("map").setView([59.3293, 18.0686], 12);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
-  attribution: "&copy; OpenStreetMap"
+  attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
+      'Tiles style by <a href="https://www.hotosm.org/">Humanitarian OpenStreetMap Team</a>'
 }).addTo(map);
 
 const markers = new Map();
