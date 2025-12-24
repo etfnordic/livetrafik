@@ -144,7 +144,7 @@ function colorForLine(line) {
   return "#111827";
 }
 
-function darkenHex(hex, amount = 0.35) {
+function darkenHex(hex, amount = 0.5) {
   const clamp = (v) => Math.max(0, Math.min(255, v));
 
   const r = parseInt(hex.slice(1, 3), 16);
@@ -207,7 +207,7 @@ function fmtSpeed(speedKmh) {
  */
 function makeArrowIcon(line, bearingDeg) {
   const color = colorForLine(line);
-  const stroke = darkenHex(color, 0.35);
+  const stroke = darkenHex(color, 0.5);
 
 
   // Ingen bearing => cirkel
