@@ -91,9 +91,19 @@ function togglePinnedLabel(v, pos) {
 
 // klick på kartbakgrund -> avpinna
 map.on("click", () => {
-  if (pinnedLabelMarker) map.removeLayer(pinnedLabelMarker);
-  pinnedLabelMarker = null;
-  pinnedTrainId = null;
+  // ta bort pinnad label
+  if (pinnedLabelMarker) {
+    map.removeLayer(pinnedLabelMarker);
+    pinnedLabelMarker = null;
+    pinnedTrainId = null;
+  }
+
+  // ta även bort ev. hover-label
+  if (hoverLabelMarker) {
+    map.removeLayer(hoverLabelMarker);
+    hoverLabelMarker = null;
+    hoverTrainId = null;
+  }
 });
 
 /* ----------------------------
