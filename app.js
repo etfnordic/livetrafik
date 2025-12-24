@@ -2,8 +2,10 @@ import { TRIP_TO_LINE } from "./data/trip_to_line.js";
 
 const API_URL = "https://metro.etfnordic.workers.dev"; // worker root (returnerar array)
 
-/* --- Poll + animation tuning (som du redan kör) --- */
-const POLL_MS = 3000;
+/* --- Poll + animation tuning --- */
+const POLL_MS = 3000; // behåll 3000 om du vill (ändra till 10000 när du behöver)
+const ANIM_MIN_MS = 350;
+const ANIM_MAX_MS = Math.min(POLL_MS * 0.85, 2500);
 
 const map = L.map("map").setView([59.3293, 18.0686], 12);
 L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
@@ -19,200 +21,6 @@ const lastBearing = new Map(); // bearingDeg
 const bearingEstablished = new Map(); // boolean per train id
 
 let timer = null;
-
-/* ----------------------------
-   FILTER: grupper + state (NYTT)
------------------------------ */
-const GROUPS = [
-  {
-    id: "tunnelbana",
-    name: "Tunnelbana",
-    kind: "metro",
-    lines: ["10", "11", "13", "14", "17", "18", "19"],
-    // chip färg hanteras av CSS (3 band)
-  },
-  { id: "pendel", name: "Pendeltåg", color: "#ED66A5", lines: ["40", "41", "43", "43X", "48"] },
-  { id: "tvarbana", name: "Tvärbana", color: "#E08A32", lines: ["30", "31"] },
-  { id: "roslagsbanan", name: "Roslagsbanan", color: "#A86DAE", lines: ["27", "27S", "28", "28S", "29"] },
-  { id: "saltsjobanan", name: "Saltsjöbanan", color: "#21B6BA", lines: ["25", "26"] },
-  { id: "lidingobanan", name: "Lidingöbanan", color: "#B76934", lines: ["21"] },
-  { id: "sparvagcity", name: "Spårväg City", color: "#878C85", lines: ["7"] },
-  { id: "nockebybanan", name: "Nockebybanan", color: "#738BA4", lines: ["12"] },
-];
-
-const ALL_LINES = GROUPS.flatMap(g => g.lines);
-
-// localStorage state
-const STORAGE_KEY = "visibleLinesV1";
-let enabledLines = loadEnabledLines();
-
-function loadEnabledLines() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set(ALL_LINES);
-    const arr = JSON.parse(raw);
-    const s = new Set(arr.filter(x => ALL_LINES.includes(x)));
-    return s.size ? s : new Set(ALL_LINES);
-  } catch {
-    return new Set(ALL_LINES);
-  }
-}
-
-function saveEnabledLines() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...enabledLines]));
-  } catch {}
-}
-
-function isLineEnabled(line) {
-  return enabledLines.has(normalizeLine(line));
-}
-
-function groupCounts(group) {
-  const total = group.lines.length;
-  const enabled = group.lines.filter(l => enabledLines.has(l)).length;
-  return { enabled, total };
-}
-
-// Hide/show marker groups utan att delete:a dem
-function setTrainVisible(m, visible) {
-  if (visible) {
-    if (!m.isOnMap) {
-      m.group.addTo(map);
-      m.isOnMap = true;
-    }
-  } else {
-    if (m.isOnMap) {
-      map.removeLayer(m.group);
-      m.isOnMap = false;
-    }
-  }
-}
-
-function applyVisibilityAll() {
-  // toggla befintliga tåg baserat på deras line
-  for (const [, m] of markers.entries()) {
-    const visible = isLineEnabled(m.line);
-    setTrainVisible(m, visible);
-  }
-
-  // “Inga linjer valda”
-  const noLinesMsg = document.getElementById("noLinesMsg");
-  if (noLinesMsg) noLinesMsg.style.display = enabledLines.size === 0 ? "block" : "none";
-}
-
-function toggleGroup(groupId) {
-  const group = GROUPS.find(g => g.id === groupId);
-  if (!group) return;
-
-  const { enabled, total } = groupCounts(group);
-  const shouldEnableAll = enabled !== total; // OFF eller PARTIAL => slå på alla
-
-  if (shouldEnableAll) {
-    for (const l of group.lines) enabledLines.add(l);
-  } else {
-    for (const l of group.lines) enabledLines.delete(l);
-  }
-
-  saveEnabledLines();
-  renderFilterUI();
-  applyVisibilityAll();
-}
-
-function toggleLine(line) {
-  const l = normalizeLine(line);
-  if (enabledLines.has(l)) enabledLines.delete(l);
-  else enabledLines.add(l);
-
-  saveEnabledLines();
-  renderFilterUI();
-  applyVisibilityAll();
-}
-
-function setAllLines(on) {
-  enabledLines = on ? new Set(ALL_LINES) : new Set();
-  saveEnabledLines();
-  renderFilterUI();
-  applyVisibilityAll();
-}
-
-function renderFilterUI() {
-  const groupChips = document.getElementById("groupChips");
-  const subChips = document.getElementById("subChips");
-  if (!groupChips || !subChips) return;
-
-  groupChips.innerHTML = "";
-  subChips.innerHTML = "";
-
-  // --- huvudchips ---
-  for (const g of GROUPS) {
-    const { enabled, total } = groupCounts(g);
-    const isOn = enabled > 0;
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "chip" + (g.kind === "metro" ? " chipMetro" : "") + (!isOn ? " chipOff" : "");
-
-    if (g.kind !== "metro") {
-      btn.style.background = g.color;
-    }
-
-    btn.textContent = g.name;
-
-    // badge "6/7" (visas när >0)
-    if (enabled > 0) {
-      const badge = document.createElement("div");
-      badge.className = "chipBadge";
-      badge.textContent = `${enabled}/${total}`;
-      btn.appendChild(badge);
-    }
-
-    btn.addEventListener("click", () => toggleGroup(g.id));
-    groupChips.appendChild(btn);
-  }
-
-  // --- underchips (alla grupper visas alltid) ---
-  for (const g of GROUPS) {
-    const row = document.createElement("div");
-    row.className = "subGroup";
-
-    const title = document.createElement("div");
-    title.className = "subGroupTitle";
-    title.textContent = g.name + ":";
-    row.appendChild(title);
-
-    for (const line of g.lines) {
-      const on = enabledLines.has(line);
-
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "subChip" + (!on ? " subChipOff" : "");
-      b.textContent = line;
-
-      // färg per grupp (tunnelbanans underchips kan färgas per linje via colorForLine)
-      const color =
-        g.kind === "metro" ? colorForLine(line) :
-        (g.color ?? "#111827");
-
-      b.style.background = color;
-
-      b.addEventListener("click", () => toggleLine(line));
-      row.appendChild(b);
-    }
-
-    subChips.appendChild(row);
-  }
-
-  // knappar Alla/Inga
-  const btnAll = document.getElementById("btnAll");
-  const btnNone = document.getElementById("btnNone");
-  if (btnAll) btnAll.onclick = () => setAllLines(true);
-  if (btnNone) btnNone.onclick = () => setAllLines(false);
-
-  // “Inga linjer valda”
-  const noLinesMsg = document.getElementById("noLinesMsg");
-  if (noLinesMsg) noLinesMsg.style.display = enabledLines.size === 0 ? "block" : "none";
-}
 
 /* ----------------------------
    Hover/Pin label-state
@@ -242,8 +50,9 @@ function hideHoverLabel(trainId) {
 }
 
 function showHoverLabel(v, pos) {
-  if (pinnedTrainId === v.id) return;
+  if (pinnedTrainId === v.id) return; // rör inte pinnad label
 
+  // ta bort tidigare hover-label om vi byter tåg
   if (hoverTrainId && hoverTrainId !== v.id && hoverLabelMarker) {
     map.removeLayer(hoverLabelMarker);
     hoverLabelMarker = null;
@@ -251,6 +60,7 @@ function showHoverLabel(v, pos) {
 
   hoverTrainId = v.id;
 
+  // hover label får "hover"-klass (svagare skugga i CSS)
   const icon = makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, false);
 
   if (!hoverLabelMarker) {
@@ -266,6 +76,7 @@ function showHoverLabel(v, pos) {
 }
 
 function togglePinnedLabel(v, pos) {
+  // Ta bort hover-label direkt när vi klickar (så inga “spöken”/dubbla labels)
   if (hoverLabelMarker) {
     map.removeLayer(hoverLabelMarker);
     hoverLabelMarker = null;
@@ -273,6 +84,7 @@ function togglePinnedLabel(v, pos) {
   }
   isPointerOverTrain = false;
 
+  // Klick på samma tåg -> avpinna
   if (pinnedTrainId === v.id) {
     if (pinnedLabelMarker) map.removeLayer(pinnedLabelMarker);
     pinnedLabelMarker = null;
@@ -280,8 +92,10 @@ function togglePinnedLabel(v, pos) {
     return;
   }
 
+  // Ny pin -> ta bort gammal pin
   if (pinnedLabelMarker) map.removeLayer(pinnedLabelMarker);
 
+  // pinned label får "pinned"-klass (starkare skugga i CSS)
   const icon = makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true);
 
   pinnedTrainId = v.id;
@@ -292,6 +106,7 @@ function togglePinnedLabel(v, pos) {
   }).addTo(map);
 }
 
+// klick på kartbakgrund -> avpinna + städa hover
 map.on("click", () => {
   if (pinnedLabelMarker) {
     map.removeLayer(pinnedLabelMarker);
@@ -308,11 +123,83 @@ map.on("click", () => {
   isPointerOverTrain = false;
 });
 
+// failsafe: om Leaflet/DOM missar mouseout så städar vi ändå
 map.on("mousemove", () => {
-  if (!isPointerOverTrain && hoverTrainId && hoverLabelMarker && pinnedTrainId !== hoverTrainId) {
+  if (
+    !isPointerOverTrain &&
+    hoverTrainId &&
+    hoverLabelMarker &&
+    pinnedTrainId !== hoverTrainId
+  ) {
     hideHoverLabel(hoverTrainId);
   }
 });
+
+/* ----------------------------
+   Animation helpers (NYTT)
+----------------------------- */
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// duration baserat på pixelavstånd (känns konstant oavsett zoom)
+function computeAnimMs(fromLatLng, toLatLng) {
+  const p1 = map.latLngToLayerPoint(fromLatLng);
+  const p2 = map.latLngToLayerPoint(toLatLng);
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const distPx = Math.sqrt(dx * dx + dy * dy);
+
+  // tweak: 5..10 ms per pixel
+  const ms = distPx * 7;
+  return clamp(ms, ANIM_MIN_MS, ANIM_MAX_MS);
+}
+
+// animera marker mellan två positioner, och låt labels följa med per frame
+function animateTrainTo(m, toPos, durationMs, onFrame) {
+  if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
+
+  const from = m.arrowMarker.getLatLng();
+  const to = L.latLng(toPos[0], toPos[1]);
+
+  const dLat = Math.abs(from.lat - to.lat);
+  const dLng = Math.abs(from.lng - to.lng);
+  if (dLat < 1e-8 && dLng < 1e-8) {
+    m.arrowMarker.setLatLng(to);
+    onFrame?.(to);
+    m.anim = null;
+    return;
+  }
+
+  const start = performance.now();
+  const anim = { raf: null };
+  m.anim = anim;
+
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / durationMs);
+    const e = easeInOutCubic(t);
+
+    const lat = from.lat + (to.lat - from.lat) * e;
+    const lng = from.lng + (to.lng - from.lng) * e;
+    const cur = L.latLng(lat, lng);
+
+    m.arrowMarker.setLatLng(cur);
+    onFrame?.(cur);
+
+    if (t < 1) {
+      anim.raf = requestAnimationFrame(step);
+    } else {
+      anim.raf = null;
+      m.anim = null;
+    }
+  };
+
+  anim.raf = requestAnimationFrame(step);
+}
 
 /* ----------------------------
    Utilities
@@ -325,30 +212,44 @@ function normalizeLine(rawLine) {
 
 function colorForLine(line) {
   const l = normalizeLine(line);
-
+  // Spårväg city
   if (l === "7") return "#878C85";
+  // Tunnelbanan blå linje
   if (l === "10" || l === "11") return "#0091D2";
+  // Nockebybanan
   if (l === "12") return "#738BA4";
+  // Tunnelbanan röd linje
   if (l === "13" || l === "14") return "#E31F26";
+  // Tunnelbanan grön linje
   if (l === "17" || l === "18" || l === "19") return "#00B259";
+  // Lidingöbanan
   if (l === "21") return "#B76934";
+  // Saltsjöbanan
   if (l === "25" || l === "26") return "#21B6BA";
+  // Roslagsbanan
   if (l === "27" || l === "27S" || l === "28" || l === "28S" || l === "29") return "#A86DAE";
+  // Tvärbanan
   if (l === "30" || l === "31") return "#E08A32";
+  // Pendeltåg
   if (l === "40" || l === "41" || l === "43" || l === "43X" || l === "48") return "#ED66A5";
 
   return "#111827";
 }
 
 function darkenHex(hex, amount = 0.5) {
-  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const clamp255 = (v) => Math.max(0, Math.min(255, v));
+
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  const dr = clamp(Math.round(r * (1 - amount)));
-  const dg = clamp(Math.round(g * (1 - amount)));
-  const db = clamp(Math.round(b * (1 - amount)));
-  return `#${dr.toString(16).padStart(2, "0")}${dg.toString(16).padStart(2, "0")}${db.toString(16).padStart(2, "0")}`;
+
+  const dr = clamp255(Math.round(r * (1 - amount)));
+  const dg = clamp255(Math.round(g * (1 - amount)));
+  const db = clamp255(Math.round(b * (1 - amount)));
+
+  return `#${dr.toString(16).padStart(2, "0")}${dg
+    .toString(16)
+    .padStart(2, "0")}${db.toString(16).padStart(2, "0")}`;
 }
 
 function headingFromPoints(lat1, lon1, lat2, lon2) {
@@ -360,7 +261,9 @@ function headingFromPoints(lat1, lon1, lat2, lon2) {
   const Δλ = toRad(lon2 - lon1);
 
   const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) -
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
 
   const θ = Math.atan2(y, x);
   return (toDeg(θ) + 360) % 360;
@@ -385,10 +288,15 @@ function fmtSpeed(speedKmh) {
   return ` • ${Math.round(speedKmh)} km/h`;
 }
 
-function makeArrowIcon(line, bearingDeg) {
+/**
+ * Icon: cirkel (innan bearing) eller pil (när bearing finns).
+ * pop=true används när ett tåg går från cirkel -> pil första gången.
+ */
+function makeArrowIcon(line, bearingDeg, pop = false) {
   const color = colorForLine(line);
   const stroke = darkenHex(color, 0.5);
 
+  // Ingen bearing => cirkel
   if (!Number.isFinite(bearingDeg)) {
     const html = `
       <div class="trainMarker" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
@@ -409,14 +317,14 @@ function makeArrowIcon(line, bearingDeg) {
   }
 
   const rot = bearingDeg + 90;
+  const popWrapClass = pop ? "trainMarkerPopWrap" : "";
 
+  // Viktigt: pop-animation på wrapper (inte på rotate-diven)
   const html = `
-    <div class="trainMarker"
-      style="
-        transform: rotate(${rot}deg);
-        filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
-      ">
-      ${arrowSvg(color, stroke)}
+    <div class="${popWrapClass}" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
+      <div class="trainMarker" style="transform: rotate(${rot}deg);">
+        ${arrowSvg(color, stroke)}
+      </div>
     </div>
   `;
 
@@ -479,7 +387,8 @@ function upsertTrain(v) {
   const prev = lastPos.get(v.id);
   if (bearing == null && prev && prev.lat != null && prev.lon != null) {
     const moved =
-      Math.abs(v.lat - prev.lat) > 0.00002 || Math.abs(v.lon - prev.lon) > 0.00002;
+      Math.abs(v.lat - prev.lat) > 0.00002 ||
+      Math.abs(v.lon - prev.lon) > 0.00002;
 
     if (moved) {
       bearing = headingFromPoints(prev.lat, prev.lon, v.lat, v.lon);
@@ -492,19 +401,23 @@ function upsertTrain(v) {
     lastBearing.set(v.id, bearing);
   }
 
-  if (bearing == null && bearingEstablished.get(v.id) === true && lastBearing.has(v.id)) {
+  if (
+    bearing == null &&
+    bearingEstablished.get(v.id) === true &&
+    lastBearing.has(v.id)
+  ) {
     bearing = lastBearing.get(v.id);
   }
 
   lastPos.set(v.id, { lat: v.lat, lon: v.lon, ts: v.ts ?? Date.now() });
 
-  const arrowIcon = makeArrowIcon(v.line, Number.isFinite(bearing) ? bearing : NaN);
-
-  const shouldBeVisible = isLineEnabled(v.line);
+  const hasBearingNow = Number.isFinite(bearing);
 
   if (!markers.has(v.id)) {
-    const group = L.layerGroup();
+    // nytt tåg: inget "pop" här (vi vet inte om det nyss var cirkel)
+    const arrowIcon = makeArrowIcon(v.line, hasBearingNow ? bearing : NaN, false);
 
+    const group = L.layerGroup();
     const arrowMarker = L.marker(pos, {
       icon: arrowIcon,
       interactive: true,
@@ -529,38 +442,51 @@ function upsertTrain(v) {
     });
 
     group.addLayer(arrowMarker);
-
-    // lägg bara på kartan om linjen är aktiverad
-    if (shouldBeVisible) group.addTo(map);
+    group.addTo(map);
 
     markers.set(v.id, {
       group,
       arrowMarker,
       lastV: v,
       lastPos: pos,
-      line: v.line,
-      isOnMap: shouldBeVisible
+      hasBearing: hasBearingNow,
+      anim: null,
     });
   } else {
     const m = markers.get(v.id);
 
+    const hadBearingBefore = m.hasBearing === true;
+    const pop = !hadBearingBefore && hasBearingNow;
+
     m.lastV = v;
     m.lastPos = pos;
-    m.line = v.line;
+    m.hasBearing = hasBearingNow;
 
-    m.arrowMarker.setLatLng(pos);
-    m.arrowMarker.setIcon(arrowIcon);
+    // uppdatera icon (och ev pop-anim)
+    m.arrowMarker.setIcon(makeArrowIcon(v.line, hasBearingNow ? bearing : NaN, pop));
 
-    // visibility (hide/show)
-    setTrainVisible(m, shouldBeVisible);
+    // animera position med distansbaserad duration
+    const from = m.arrowMarker.getLatLng();
+    const to = L.latLng(pos[0], pos[1]);
+    const dur = computeAnimMs(from, to);
 
-    // hover/pinned uppdateringar (om synliga)
-    if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
-      showHoverLabel(v, pos);
-    }
+    animateTrainTo(m, pos, dur, (curLatLng) => {
+      if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
+        hoverLabelMarker.setLatLng(curLatLng);
+      }
+      if (pinnedTrainId === v.id && pinnedLabelMarker) {
+        pinnedLabelMarker.setLatLng(curLatLng);
+      }
+    });
+
+    // uppdatera ikon/text för pinnad label (pos sköts av animationen)
     if (pinnedTrainId === v.id && pinnedLabelMarker) {
-      pinnedLabelMarker.setLatLng(pos);
       pinnedLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true));
+    }
+
+    // uppdatera ikon/text för hover label (pos sköts av animationen)
+    if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
+      hoverLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, false));
     }
   }
 }
@@ -586,6 +512,9 @@ async function refreshLive() {
 
   for (const [id, m] of markers.entries()) {
     if (!seen.has(id)) {
+      // stoppa ev animation
+      if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
+
       map.removeLayer(m.group);
       markers.delete(id);
       lastPos.delete(id);
@@ -611,10 +540,6 @@ function stopPolling() {
   if (timer) clearInterval(timer);
   timer = null;
 }
-
-/* init filter UI */
-renderFilterUI();
-applyVisibilityAll();
 
 startPolling();
 refreshLive().catch(console.error);
