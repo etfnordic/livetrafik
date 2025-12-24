@@ -2,6 +2,11 @@ import { TRIP_TO_LINE } from "./data/trip_to_line.js";
 
 const API_URL = "https://metro.etfnordic.workers.dev"; // worker root (returnerar array)
 
+/* --- Poll + animation tuning --- */
+const POLL_MS = 3000; // behåll 3000 om du vill (ändra till 10000 när du behöver)
+const ANIM_MIN_MS = 350;
+const ANIM_MAX_MS = Math.min(POLL_MS * 0.85, 2500);
+
 const map = L.map("map").setView([59.3293, 18.0686], 12);
 L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -120,10 +125,81 @@ map.on("click", () => {
 
 // failsafe: om Leaflet/DOM missar mouseout så städar vi ändå
 map.on("mousemove", () => {
-  if (!isPointerOverTrain && hoverTrainId && hoverLabelMarker && pinnedTrainId !== hoverTrainId) {
+  if (
+    !isPointerOverTrain &&
+    hoverTrainId &&
+    hoverLabelMarker &&
+    pinnedTrainId !== hoverTrainId
+  ) {
     hideHoverLabel(hoverTrainId);
   }
 });
+
+/* ----------------------------
+   Animation helpers (NYTT)
+----------------------------- */
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// duration baserat på pixelavstånd (känns konstant oavsett zoom)
+function computeAnimMs(fromLatLng, toLatLng) {
+  const p1 = map.latLngToLayerPoint(fromLatLng);
+  const p2 = map.latLngToLayerPoint(toLatLng);
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const distPx = Math.sqrt(dx * dx + dy * dy);
+
+  // tweak: 5..10 ms per pixel
+  const ms = distPx * 7;
+  return clamp(ms, ANIM_MIN_MS, ANIM_MAX_MS);
+}
+
+// animera marker mellan två positioner, och låt labels följa med per frame
+function animateTrainTo(m, toPos, durationMs, onFrame) {
+  if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
+
+  const from = m.arrowMarker.getLatLng();
+  const to = L.latLng(toPos[0], toPos[1]);
+
+  const dLat = Math.abs(from.lat - to.lat);
+  const dLng = Math.abs(from.lng - to.lng);
+  if (dLat < 1e-8 && dLng < 1e-8) {
+    m.arrowMarker.setLatLng(to);
+    onFrame?.(to);
+    m.anim = null;
+    return;
+  }
+
+  const start = performance.now();
+  const anim = { raf: null };
+  m.anim = anim;
+
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / durationMs);
+    const e = easeInOutCubic(t);
+
+    const lat = from.lat + (to.lat - from.lat) * e;
+    const lng = from.lng + (to.lng - from.lng) * e;
+    const cur = L.latLng(lat, lng);
+
+    m.arrowMarker.setLatLng(cur);
+    onFrame?.(cur);
+
+    if (t < 1) {
+      anim.raf = requestAnimationFrame(step);
+    } else {
+      anim.raf = null;
+      m.anim = null;
+    }
+  };
+
+  anim.raf = requestAnimationFrame(step);
+}
 
 /* ----------------------------
    Utilities
@@ -157,15 +233,15 @@ function colorForLine(line) {
 }
 
 function darkenHex(hex, amount = 0.5) {
-  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const clamp255 = (v) => Math.max(0, Math.min(255, v));
 
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
 
-  const dr = clamp(Math.round(r * (1 - amount)));
-  const dg = clamp(Math.round(g * (1 - amount)));
-  const db = clamp(Math.round(b * (1 - amount)));
+  const dr = clamp255(Math.round(r * (1 - amount)));
+  const dg = clamp255(Math.round(g * (1 - amount)));
+  const db = clamp255(Math.round(b * (1 - amount)));
 
   return `#${dr.toString(16).padStart(2, "0")}${dg
     .toString(16)
@@ -208,10 +284,15 @@ function fmtSpeed(speedKmh) {
   return ` • ${Math.round(speedKmh)} km/h`;
 }
 
-function makeArrowIcon(line, bearingDeg) {
+/**
+ * Icon: cirkel (innan bearing) eller pil (när bearing finns).
+ * pop=true används när ett tåg går från cirkel -> pil första gången.
+ */
+function makeArrowIcon(line, bearingDeg, pop = false) {
   const color = colorForLine(line);
   const stroke = darkenHex(color, 0.5);
 
+  // Ingen bearing => cirkel
   if (!Number.isFinite(bearingDeg)) {
     const html = `
       <div class="trainMarker" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
@@ -232,14 +313,14 @@ function makeArrowIcon(line, bearingDeg) {
   }
 
   const rot = bearingDeg + 90;
+  const popWrapClass = pop ? "trainMarkerPopWrap" : "";
 
+  // Viktigt: pop-animation på wrapper (inte på rotate-diven)
   const html = `
-    <div class="trainMarker"
-      style="
-        transform: rotate(${rot}deg);
-        filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
-      ">
-      ${arrowSvg(color, stroke)}
+    <div class="${popWrapClass}" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
+      <div class="trainMarker" style="transform: rotate(${rot}deg);">
+        ${arrowSvg(color, stroke)}
+      </div>
     </div>
   `;
 
@@ -289,7 +370,6 @@ function enrich(v) {
 
 function upsertTrain(v) {
   v.line = normalizeLine(v.line);
-
   const pos = [v.lat, v.lon];
 
   let bearing = null;
@@ -303,7 +383,8 @@ function upsertTrain(v) {
   const prev = lastPos.get(v.id);
   if (bearing == null && prev && prev.lat != null && prev.lon != null) {
     const moved =
-      Math.abs(v.lat - prev.lat) > 0.00002 || Math.abs(v.lon - prev.lon) > 0.00002;
+      Math.abs(v.lat - prev.lat) > 0.00002 ||
+      Math.abs(v.lon - prev.lon) > 0.00002;
 
     if (moved) {
       bearing = headingFromPoints(prev.lat, prev.lon, v.lat, v.lon);
@@ -316,17 +397,23 @@ function upsertTrain(v) {
     lastBearing.set(v.id, bearing);
   }
 
-  if (bearing == null && bearingEstablished.get(v.id) === true && lastBearing.has(v.id)) {
+  if (
+    bearing == null &&
+    bearingEstablished.get(v.id) === true &&
+    lastBearing.has(v.id)
+  ) {
     bearing = lastBearing.get(v.id);
   }
 
   lastPos.set(v.id, { lat: v.lat, lon: v.lon, ts: v.ts ?? Date.now() });
 
-  const arrowIcon = makeArrowIcon(v.line, Number.isFinite(bearing) ? bearing : NaN);
+  const hasBearingNow = Number.isFinite(bearing);
 
   if (!markers.has(v.id)) {
-    const group = L.layerGroup();
+    // nytt tåg: inget "pop" här (vi vet inte om det nyss var cirkel)
+    const arrowIcon = makeArrowIcon(v.line, hasBearingNow ? bearing : NaN, false);
 
+    const group = L.layerGroup();
     const arrowMarker = L.marker(pos, {
       icon: arrowIcon,
       interactive: true,
@@ -353,25 +440,49 @@ function upsertTrain(v) {
     group.addLayer(arrowMarker);
     group.addTo(map);
 
-    markers.set(v.id, { group, arrowMarker, lastV: v, lastPos: pos });
+    markers.set(v.id, {
+      group,
+      arrowMarker,
+      lastV: v,
+      lastPos: pos,
+      hasBearing: hasBearingNow,
+      anim: null,
+    });
   } else {
     const m = markers.get(v.id);
 
+    const hadBearingBefore = m.hasBearing === true;
+    const pop = !hadBearingBefore && hasBearingNow;
+
     m.lastV = v;
     m.lastPos = pos;
+    m.hasBearing = hasBearingNow;
 
-    m.arrowMarker.setLatLng(pos);
-    m.arrowMarker.setIcon(arrowIcon);
+    // uppdatera icon (och ev pop-anim)
+    m.arrowMarker.setIcon(makeArrowIcon(v.line, hasBearingNow ? bearing : NaN, pop));
 
-    // om hoverad (och inte pinnad): uppdatera hover-label så den följer med
-    if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
-      showHoverLabel(v, pos);
+    // animera position med distansbaserad duration
+    const from = m.arrowMarker.getLatLng();
+    const to = L.latLng(pos[0], pos[1]);
+    const dur = computeAnimMs(from, to);
+
+    animateTrainTo(m, pos, dur, (curLatLng) => {
+      if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
+        hoverLabelMarker.setLatLng(curLatLng);
+      }
+      if (pinnedTrainId === v.id && pinnedLabelMarker) {
+        pinnedLabelMarker.setLatLng(curLatLng);
+      }
+    });
+
+    // uppdatera ikon/text för pinnad label (pos sköts av animationen)
+    if (pinnedTrainId === v.id && pinnedLabelMarker) {
+      pinnedLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true));
     }
 
-    // om pinnad: uppdatera pinnad label (med pinned-stil)
-    if (pinnedTrainId === v.id && pinnedLabelMarker) {
-      pinnedLabelMarker.setLatLng(pos);
-      pinnedLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true));
+    // uppdatera ikon/text för hover label (pos sköts av animationen)
+    if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
+      hoverLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, false));
     }
   }
 }
@@ -397,13 +508,15 @@ async function refreshLive() {
 
   for (const [id, m] of markers.entries()) {
     if (!seen.has(id)) {
+      // stoppa ev animation
+      if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
+
       map.removeLayer(m.group);
       markers.delete(id);
       lastPos.delete(id);
       lastBearing.delete(id);
       bearingEstablished.delete(id);
 
-      // städa hover/pin om det var detta tåg
       if (hoverTrainId === id) hideHoverLabel(id);
 
       if (pinnedTrainId === id) {
@@ -417,7 +530,7 @@ async function refreshLive() {
 
 function startPolling() {
   stopPolling();
-  timer = setInterval(() => refreshLive().catch(console.error), 3000);
+  timer = setInterval(() => refreshLive().catch(console.error), POLL_MS);
 }
 function stopPolling() {
   if (timer) clearInterval(timer);
