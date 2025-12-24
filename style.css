@@ -1,9 +1,9 @@
 html, body { height: 100%; margin: 0; }
 #map { height: 100vh; width: 100%; }
 
-/* Wrapper runt alla tåg-ikoner */
 .trainIconWrap {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+  cursor: pointer;
 }
 
 /* Pilar */
