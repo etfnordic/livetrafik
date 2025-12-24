@@ -285,7 +285,7 @@ function colorForRailLine(line) {
   return "#111827";
 }
 
-function darkenHex(hex, amount = 0.5) {
+function darkenHex(hex, amount = 0.9) {
   const clamp255 = (v) => Math.max(0, Math.min(255, v));
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -343,7 +343,7 @@ function railArrowSvg(fillColor, strokeColor, sizePx = 34) {
 
 function makeRailIcon(line, bearingDeg, pop = false) {
   const color = colorForRailLine(line);
-  const stroke = darkenHex(color, 0.5);
+  const stroke = darkenHex(color, 0.9);
 
   if (!Number.isFinite(bearingDeg)) {
     const html = `
