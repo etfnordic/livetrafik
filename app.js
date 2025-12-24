@@ -35,7 +35,6 @@ let pinnedLabelMarker = null;
 let isPointerOverTrain = false;
 
 function buildLabelText(v) {
-  if (v.unknownLine) return "Ej i trafik";
   return v.headsign ? `${v.line} → ${v.headsign}` : v.line;
 }
 
@@ -214,7 +213,6 @@ function normalizeLine(rawLine) {
 function colorForLine(line) {
   const l = normalizeLine(line);
 
-  if (!line || line === "?") return "#1F2937";
   if (l === "7") return "#878C85";
   if (l === "10" || l === "11") return "#0091D2";
   if (l === "12") return "#738BA4";
@@ -359,33 +357,14 @@ function makeLabelIcon(line, labelText, speedKmh, pinned = false) {
 }
 
 function enrich(v) {
-  // Om API:et inte ens har tripId -> visa ändå (okänd/ej i trafik)
-  if (!v?.tripId) {
-    return {
-      ...v,
-      line: "?",
-      headsign: null,
-      unknownLine: true,
-    };
-  }
-
+  if (!v?.tripId) return null;
   const info = TRIP_TO_LINE[v.tripId];
-
-  // Om tripId inte finns i mappen eller saknar line -> visa ändå
-  if (!info?.line) {
-    return {
-      ...v,
-      line: "?",
-      headsign: null,
-      unknownLine: true,
-    };
-  }
+  if (!info?.line) return null;
 
   return {
     ...v,
     line: info.line,
     headsign: info.headsign ?? null,
-    unknownLine: false,
   };
 }
 
