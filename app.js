@@ -212,22 +212,26 @@ function normalizeLine(rawLine) {
 
 function colorForLine(line) {
   const l = normalizeLine(line);
-
+  // Spårväg city
   if (l === "7") return "#878C85";
+  // Tunnelbanan blå linje
   if (l === "10" || l === "11") return "#0091D2";
+  // Nockebybanan
   if (l === "12") return "#738BA4";
+  // Tunnelbanan röd linje
   if (l === "13" || l === "14") return "#E31F26";
+  // Tunnelbanan grön linje
   if (l === "17" || l === "18" || l === "19") return "#00B259";
+  // Lidingöbanan
   if (l === "21") return "#B76934";
+  // Saltsjöbanan
   if (l === "25" || l === "26") return "#21B6BA";
-
-  if (l === "27" || l === "27S" || l === "28" || l === "28S" || l === "29")
-    return "#A86DAE";
-
+  // Roslagsbanan
+  if (l === "27" || l === "27S" || l === "28" || l === "28S" || l === "29") return "#A86DAE";
+  // Tvärbanan
   if (l === "30" || l === "31") return "#E08A32";
-
-  if (l === "40" || l === "41" || l === "43" || l === "43X" || l === "48")
-    return "#ED66A5";
+  // Pendeltåg
+  if (l === "40" || l === "41" || l === "43" || l === "43X" || l === "48") return "#ED66A5";
 
   return "#111827";
 }
