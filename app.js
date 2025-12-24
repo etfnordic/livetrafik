@@ -1,6 +1,6 @@
 import { TRIP_TO_LINE } from "./data/trip_to_line.js";
 
-const API_URL = "https://metro.etfnordic.workers.dev"; // worker root (returnerar array)
+const API_URL = "https://metro.etfnordic.workers.dev";
 
 /* --- Poll + animation tuning --- */
 const POLL_MS = 3000;
@@ -16,9 +16,9 @@ L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 const markers = new Map();
-const lastPos = new Map(); // {lat, lon, ts}
-const lastBearing = new Map(); // bearingDeg
-const bearingEstablished = new Map(); // boolean per train id
+const lastPos = new Map();
+const lastBearing = new Map();
+const bearingEstablished = new Map();
 
 let timer = null;
 
@@ -31,7 +31,6 @@ let hoverLabelMarker = null;
 let pinnedTrainId = null;
 let pinnedLabelMarker = null;
 
-// robust hover-state (för att garantera att labeln försvinner)
 let isPointerOverTrain = false;
 
 function buildLabelText(v) {
@@ -50,17 +49,14 @@ function hideHoverLabel(trainId) {
 }
 
 function showHoverLabel(v, pos) {
-  if (pinnedTrainId === v.id) return; // rör inte pinnad label
+  if (pinnedTrainId === v.id) return;
 
-  // ta bort tidigare hover-label om vi byter tåg
   if (hoverTrainId && hoverTrainId !== v.id && hoverLabelMarker) {
     map.removeLayer(hoverLabelMarker);
     hoverLabelMarker = null;
   }
 
   hoverTrainId = v.id;
-
-  // hover label får "hover"-klass (svagare skugga i CSS)
   const icon = makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, false);
 
   if (!hoverLabelMarker) {
@@ -76,7 +72,6 @@ function showHoverLabel(v, pos) {
 }
 
 function togglePinnedLabel(v, pos) {
-  // Ta bort hover-label direkt när vi klickar (så inga “spöken”/dubbla labels)
   if (hoverLabelMarker) {
     map.removeLayer(hoverLabelMarker);
     hoverLabelMarker = null;
@@ -84,7 +79,6 @@ function togglePinnedLabel(v, pos) {
   }
   isPointerOverTrain = false;
 
-  // Klick på samma tåg -> avpinna
   if (pinnedTrainId === v.id) {
     if (pinnedLabelMarker) map.removeLayer(pinnedLabelMarker);
     pinnedLabelMarker = null;
@@ -92,10 +86,8 @@ function togglePinnedLabel(v, pos) {
     return;
   }
 
-  // Ny pin -> ta bort gammal pin
   if (pinnedLabelMarker) map.removeLayer(pinnedLabelMarker);
 
-  // pinned label får "pinned"-klass (starkare skugga i CSS)
   const icon = makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true);
 
   pinnedTrainId = v.id;
@@ -106,7 +98,6 @@ function togglePinnedLabel(v, pos) {
   }).addTo(map);
 }
 
-// klick på kartbakgrund -> avpinna + städa hover
 map.on("click", () => {
   if (pinnedLabelMarker) {
     map.removeLayer(pinnedLabelMarker);
@@ -120,12 +111,10 @@ map.on("click", () => {
     hoverTrainId = null;
   }
 
-  // även stäng panelen med underchips om man klickar på kartan
   closeSubchipPanel();
   isPointerOverTrain = false;
 });
 
-// failsafe: om Leaflet/DOM missar mouseout så städar vi ändå
 map.on("mousemove", () => {
   if (
     !isPointerOverTrain &&
@@ -148,19 +137,16 @@ function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-// duration baserat på pixelavstånd (känns konstant oavsett zoom)
 function computeAnimMs(fromLatLng, toLatLng) {
   const p1 = map.latLngToLayerPoint(fromLatLng);
   const p2 = map.latLngToLayerPoint(toLatLng);
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   const distPx = Math.sqrt(dx * dx + dy * dy);
-
   const ms = distPx * 7;
   return clamp(ms, ANIM_MIN_MS, ANIM_MAX_MS);
 }
 
-// animera marker mellan två positioner, och låt labels följa med per frame
 function animateTrainTo(m, toPos, durationMs, onFrame) {
   if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
 
@@ -191,9 +177,8 @@ function animateTrainTo(m, toPos, durationMs, onFrame) {
     m.arrowMarker.setLatLng(cur);
     onFrame?.(cur);
 
-    if (t < 1) {
-      anim.raf = requestAnimationFrame(step);
-    } else {
+    if (t < 1) anim.raf = requestAnimationFrame(step);
+    else {
       anim.raf = null;
       m.anim = null;
     }
@@ -213,35 +198,25 @@ function normalizeLine(rawLine) {
 
 function colorForLine(line) {
   const l = normalizeLine(line);
-  // Spårväg city
-  if (l === "7") return "#878C85";
-  // Tunnelbanan blå linje
-  if (l === "10" || l === "11") return "#0091D2";
-  // Nockebybanan
-  if (l === "12") return "#738BA4";
-  // Tunnelbanan röd linje
-  if (l === "13" || l === "14") return "#E31F26";
-  // Tunnelbanan grön linje
-  if (l === "17" || l === "18" || l === "19") return "#00B259";
-  // Lidingöbanan
-  if (l === "21") return "#B76934";
-  // Saltsjöbanan
-  if (l === "25" || l === "26") return "#21B6BA";
-  // Roslagsbanan
+
+  if (l === "7") return "#878C85"; // Spårväg city
+  if (l === "10" || l === "11") return "#0091D2"; // T-bana blå
+  if (l === "12") return "#738BA4"; // Nockebybanan
+  if (l === "13" || l === "14") return "#E31F26"; // T-bana röd
+  if (l === "17" || l === "18" || l === "19") return "#00B259"; // T-bana grön
+  if (l === "21") return "#B76934"; // Lidingöbanan
+  if (l === "25" || l === "26") return "#21B6BA"; // Saltsjöbanan
   if (l === "27" || l === "27S" || l === "28" || l === "28S" || l === "29")
-    return "#A86DAE";
-  // Tvärbanan
-  if (l === "30" || l === "31") return "#E08A32";
-  // Pendeltåg
+    return "#A86DAE"; // Roslagsbanan
+  if (l === "30" || l === "31") return "#E08A32"; // Tvärbanan
   if (l === "40" || l === "41" || l === "43" || l === "43X" || l === "48")
-    return "#ED66A5";
+    return "#ED66A5"; // Pendeltåg
 
   return "#111827";
 }
 
 function darkenHex(hex, amount = 0.5) {
   const clamp255 = (v) => Math.max(0, Math.min(255, v));
-
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -291,15 +266,10 @@ function fmtSpeed(speedKmh) {
   return ` • ${Math.round(speedKmh)} km/h`;
 }
 
-/**
- * Icon: cirkel (innan bearing) eller pil (när bearing finns).
- * pop=true används när ett tåg går från cirkel -> pil första gången.
- */
 function makeArrowIcon(line, bearingDeg, pop = false) {
   const color = colorForLine(line);
   const stroke = darkenHex(color, 0.5);
 
-  // Ingen bearing => cirkel
   if (!Number.isFinite(bearingDeg)) {
     const html = `
       <div class="trainMarker" style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
@@ -338,11 +308,6 @@ function makeArrowIcon(line, bearingDeg, pop = false) {
   });
 }
 
-/**
- * Label ovanför tåget.
- * pinned=false => hover-stil
- * pinned=true  => pinnad-stil
- */
 function makeLabelIcon(line, labelText, speedKmh, pinned = false) {
   const color = colorForLine(line);
   const text = `${labelText}${fmtSpeed(speedKmh)}`;
@@ -375,40 +340,31 @@ function enrich(v) {
 }
 
 /* =========================================================
-   FILTER + CHIP UI (NYTT)
+   FILTER + CHIP UI
 ========================================================= */
 
-const LS_KEY = "sl_live.selectedLines.v2";
+const LS_KEY = "sl_live.selectedLines.v3";
 
 /**
  * selectedLines:
  * - Tom Set => visa ALLA
  * - "__NONE__" => visa INGA
- * - Annars => visa bara de linjer som finns i set
+ * - Annars => visa bara linjerna i set
  */
 let selectedLines = loadSelectedLines();
-const knownLines = new Set(); // fylls från live-feeden
+const knownLines = new Set();
 
 const MODE_DEFS = [
   {
     key: "metro",
     label: "Tunnelbana",
-    chipBg: "linear-gradient(90deg,#00B259 0%,#00B259 33%,#E31F26 33%,#E31F26 66%,#0091D2 66%,#0091D2 100%)",
+    chipBg:
+      "linear-gradient(90deg,#00B259 0%,#00B259 33%,#E31F26 33%,#E31F26 66%,#0091D2 66%,#0091D2 100%)",
     lines: ["10", "11", "13", "14", "17", "18", "19"],
   },
-  {
-    key: "commuter",
-    label: "Pendeltåg",
-    chipBg: colorForLine("40"),
-    lines: ["40", "41", "43", "43X", "48"],
-  },
+  { key: "commuter", label: "Pendeltåg", chipBg: colorForLine("40"), lines: ["40", "41", "43", "43X", "48"] },
   { key: "tram", label: "Tvärbanan", chipBg: colorForLine("30"), lines: ["30", "31"] },
-  {
-    key: "roslags",
-    label: "Roslagsbanan",
-    chipBg: colorForLine("28"),
-    lines: ["27", "27S", "28", "28S", "29"],
-  },
+  { key: "roslags", label: "Roslagsbanan", chipBg: colorForLine("28"), lines: ["27", "27S", "28", "28S", "29"] },
   { key: "saltsjo", label: "Saltsjöbanan", chipBg: colorForLine("25"), lines: ["25", "26"] },
   { key: "lidingo", label: "Lidingöbanan", chipBg: colorForLine("21"), lines: ["21"] },
   { key: "nockeby", label: "Nockebybanan", chipBg: colorForLine("12"), lines: ["12"] },
@@ -439,20 +395,14 @@ function setShowNone() {
   saveSelectedLines();
 }
 function setShowAll() {
-  selectedLines = new Set();
+  selectedLines = new Set(); // tomt = allt
   saveSelectedLines();
-}
-
-function universeLines() {
-  // “universum” av alla linjer vi känner till (def + live)
-  const defLines = MODE_DEFS.flatMap((m) => m.lines).map(normalizeLine);
-  return new Set([...defLines, ...knownLines].map(normalizeLine));
 }
 
 function isLineSelected(line) {
   const l = normalizeLine(line);
   if (isShowNone()) return false;
-  if (selectedLines.size === 0) return true; // visa allt
+  if (selectedLines.size === 0) return true;
   return selectedLines.has(l);
 }
 
@@ -460,34 +410,48 @@ function passesFilter(v) {
   return isLineSelected(v.line);
 }
 
+/**
+ * Klick på en linje-chip (toggle):
+ * - Om "Rensa" (show none): börja med {linje} (viktigt!)
+ * - Om "Visa alla" (empty): börja med {linje} (känns mest rimligt när man börjar filtrera)
+ * - Annars: toggla i set
+ */
 function toggleLineSelection(line) {
   const l = normalizeLine(line);
   if (!l) return;
 
-  // Om “visa inga” är aktivt -> starta från tom “allt”-baseline så toggling fungerar
-  if (isShowNone()) selectedLines = new Set();
-
-  // Om vi är i “visa allt”-läge (tom set) och användaren togglar en linje:
-  // initiera med hela universum så toggling blir intuitivt.
-  if (selectedLines.size === 0) {
-    selectedLines = universeLines();
+  if (isShowNone() || selectedLines.size === 0) {
+    selectedLines = new Set([l]);
+    saveSelectedLines();
+    return;
   }
 
   if (selectedLines.has(l)) selectedLines.delete(l);
   else selectedLines.add(l);
 
-  // Om vi råkar ha valt allt igen -> återgå till “visa allt” (tom set)
-  const uni = universeLines();
-  let allSelected = true;
-  for (const x of uni) {
-    if (!selectedLines.has(x)) {
-      allSelected = false;
-      break;
-    }
+  // Om användaren togglar bort allt -> gå till "visa inga" (tydligare än "visa alla")
+  if (selectedLines.size === 0) {
+    setShowNone();
+    return;
   }
-  if (allSelected) selectedLines = new Set();
 
-  // Om set blev tomt pga att universum var tomt (tidigt) -> fortfarande visa allt
+  saveSelectedLines();
+}
+
+/**
+ * Sök = "set selection" (inte toggle):
+ * - "17" => endast 17
+ * - "14,17" => endast 14 och 17
+ */
+function setSelectionFromSearch(raw) {
+  const parts = String(raw ?? "")
+    .split(",")
+    .map((s) => normalizeLine(s))
+    .filter((s) => s && s !== "__NONE__");
+
+  if (parts.length === 0) return;
+
+  selectedLines = new Set(parts);
   saveSelectedLines();
 }
 
@@ -499,12 +463,9 @@ let dockEl = null;
 let rowEl = null;
 let subPanelEl = null;
 let subPanelModeKey = null;
-let activeModeBtnEl = null;
 
 let searchInputEl = null;
 let searchBtnEl = null;
-let showAllBtnEl = null;
-let clearAllBtnEl = null;
 
 function ensureChipStylesOnce() {
   if (document.getElementById("chipDockStyles")) return;
@@ -520,7 +481,6 @@ function ensureChipStylesOnce() {
       pointer-events:none;
       max-width:calc(100vw - 20px);
     }
-    /* EN rad, scrollar horisontellt om det behövs */
     .chipRowTop{
       display:flex;
       flex-wrap:nowrap;
@@ -536,7 +496,6 @@ function ensureChipStylesOnce() {
     }
     .chipRowTop::-webkit-scrollbar{ display:none; }
 
-    /* Chip look: mer “label” än “pill” (mindre runda hörn) */
     .uiChipBtn{
       border:0;
       background:transparent;
@@ -547,9 +506,9 @@ function ensureChipStylesOnce() {
     .uiChipBtn:active{ transform: translateY(1px); }
 
     .uiChipFace{
-      border-radius: 10px; /* mindre runda än 999px */
-      padding: 6px 10px;   /* mindre */
-      font: 600 13px system-ui, -apple-system, Segoe UI, Roboto, sans-serif; /* mindre fet */
+      border-radius: 10px;
+      padding: 6px 10px;
+      font: 600 13px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       color:#fff;
       box-shadow: 0 8px 16px rgba(0,0,0,0.18);
       text-shadow: 0 1px 2px rgba(0,0,0,0.25);
@@ -569,7 +528,6 @@ function ensureChipStylesOnce() {
       outline-offset: 1px;
     }
 
-    /* knappar (Visa alla / Rensa) */
     .uiMiniBtn{
       border-radius: 10px;
       padding: 6px 10px;
@@ -583,7 +541,6 @@ function ensureChipStylesOnce() {
     }
     .uiMiniBtn:active{ transform: translateY(1px); }
 
-    /* sök */
     .chipSearchWrap{
       display:flex;
       align-items:center;
@@ -594,7 +551,7 @@ function ensureChipStylesOnce() {
       box-shadow: 0 8px 16px rgba(0,0,0,0.18);
     }
     .chipSearch{
-      width: 160px;
+      width: 120px; /* <-- kortare sökruta */
       border:0;
       outline:0;
       background: transparent;
@@ -615,12 +572,8 @@ function ensureChipStylesOnce() {
     }
     .chipSearchBtn:hover{ background: rgba(17,24,39,0.16); }
     .chipSearchBtn:active{ transform: translateY(1px); }
-    .chipSearchIcon{
-      width: 16px; height: 16px;
-      opacity: 0.8;
-    }
+    .chipSearchIcon{ width: 16px; height: 16px; opacity: 0.8; }
 
-    /* Underchips panel (positioneras under klickat mode-chip) */
     .subPanel{
       position:absolute;
       z-index:10000;
@@ -636,7 +589,6 @@ function ensureChipStylesOnce() {
     }
     .subPanel.is-open{ display:flex; }
 
-    /* Underchip inactive */
     .uiChipBtn.is-unselected .uiChipFace{
       background: rgba(140,140,140,0.26) !important;
       color: rgba(255,255,255,0.85);
@@ -664,12 +616,10 @@ function ensureChipDock() {
 
   document.body.appendChild(dockEl);
 
-  // Stäng panel om man klickar utanför UI:t
   document.addEventListener("click", (e) => {
     if (!subPanelEl.classList.contains("is-open")) return;
     const t = e.target;
-    const clickedInside =
-      dockEl.contains(t) || (subPanelEl && subPanelEl.contains(t));
+    const clickedInside = dockEl.contains(t) || subPanelEl.contains(t);
     if (!clickedInside) closeSubchipPanel();
   });
 
@@ -707,7 +657,6 @@ function renderTopRow() {
   ensureChipDock();
   rowEl.innerHTML = "";
 
-  // Mode chips
   for (const def of MODE_DEFS) {
     const btn = makeChipButton({
       label: def.label,
@@ -721,52 +670,52 @@ function renderTopRow() {
     rowEl.appendChild(btn);
   }
 
-  // Quick buttons
-  showAllBtnEl = makeMiniButton("Visa alla", () => {
-    setShowAll();
-    // show all -> visa allt direkt
-    renderSubchips(); // uppdatera states om panelen är öppen
-    refreshLive().catch(console.error);
-  });
-  clearAllBtnEl = makeMiniButton("Rensa", () => {
-    setShowNone();
-    // rensa -> ta bort allt direkt
-    removeAllTrainsNow();
-    renderSubchips();
-  });
+  rowEl.appendChild(
+    makeMiniButton("Visa alla", () => {
+      setShowAll();
+      renderSubchips();
+      refreshLive().catch(console.error);
+    })
+  );
 
-  rowEl.appendChild(showAllBtnEl);
-  rowEl.appendChild(clearAllBtnEl);
+  rowEl.appendChild(
+    makeMiniButton("Rensa", () => {
+      setShowNone();
+      removeAllTrainsNow();
+      renderSubchips();
+    })
+  );
 
-  // Search (liten input + förstoringsglas)
   const searchWrap = document.createElement("div");
   searchWrap.className = "chipSearchWrap";
 
   searchInputEl = document.createElement("input");
   searchInputEl.className = "chipSearch";
   searchInputEl.type = "text";
-  searchInputEl.placeholder = "Linje (14, 43X)…";
+  searchInputEl.placeholder = "Linje (14,17)…";
 
   searchBtnEl = document.createElement("button");
   searchBtnEl.type = "button";
   searchBtnEl.className = "chipSearchBtn";
   searchBtnEl.innerHTML = magnifierSvg();
 
-  const doSearchToggle = () => {
-    const l = normalizeLine(searchInputEl.value);
-    if (!l) return;
-    toggleLineSelection(l);
+  const runSearch = () => {
+    const raw = searchInputEl.value;
+    if (!raw || !raw.trim()) return;
+
+    setSelectionFromSearch(raw);
     searchInputEl.value = "";
+
     renderSubchips();
     refreshLive().catch(console.error);
   };
 
   searchInputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doSearchToggle();
+    if (e.key === "Enter") runSearch();
   });
   searchBtnEl.addEventListener("click", (e) => {
     e.stopPropagation();
-    doSearchToggle();
+    runSearch();
   });
 
   searchWrap.appendChild(searchInputEl);
@@ -777,15 +726,15 @@ function renderTopRow() {
 }
 
 function updateModeChipInactiveStates() {
-  // Ett mode-chip är "inactive" om INGA av dess linjer är valda (när vi inte är i “visa alla”)
-  const showAll = selectedLines.size === 0 && !isShowNone();
   for (const btn of rowEl.querySelectorAll("button[data-mode]")) {
     const key = btn.dataset.mode;
     const def = MODE_DEFS.find((d) => d.key === key);
     if (!def) continue;
 
     let anySelected = false;
-    if (showAll) anySelected = true;
+
+    if (isShowNone()) anySelected = false;
+    else if (selectedLines.size === 0) anySelected = true; // visa alla
     else {
       for (const l of def.lines) {
         if (isLineSelected(l)) {
@@ -803,21 +752,16 @@ function updateModeChipInactiveStates() {
 function toggleSubchipPanel(modeKey, modeBtnEl) {
   ensureChipDock();
 
-  // toggla stäng om samma
   if (subPanelEl.classList.contains("is-open") && subPanelModeKey === modeKey) {
     closeSubchipPanel();
     return;
   }
 
   subPanelModeKey = modeKey;
-  activeModeBtnEl = modeBtnEl;
 
-  // Positionera panelen under klickat chip
   const rect = modeBtnEl.getBoundingClientRect();
   const dockRect = dockEl.getBoundingClientRect();
 
-  // subPanel ligger i dockEl; positionera relativt viewport (dockEl är abs)
-  // Vi lägger panelen precis under chipet, och “right-alignar” snyggt om det behövs.
   const top = rect.bottom - dockRect.top + 8;
   const left = rect.left - dockRect.left;
 
@@ -833,7 +777,6 @@ function closeSubchipPanel() {
   if (!subPanelEl) return;
   subPanelEl.classList.remove("is-open");
   subPanelModeKey = null;
-  activeModeBtnEl = null;
   updateModeChipInactiveStates();
 }
 
@@ -861,18 +804,18 @@ function renderSubchips() {
         updateModeChipInactiveStates();
         refreshLive().catch(console.error);
       },
-      classes: [],
     });
 
-    // grå/transparant när den är inaktiv
-    const selected = isLineSelected(line);
-    btn.classList.toggle("is-unselected", !selected);
-
+    btn.classList.toggle("is-unselected", !isLineSelected(line));
     subPanelEl.appendChild(btn);
   }
 
   updateModeChipInactiveStates();
 }
+
+/* =========================================================
+   Marker lifecycle helpers
+========================================================= */
 
 function removeTrainCompletely(id) {
   const m = markers.get(id);
@@ -897,12 +840,12 @@ function removeTrainCompletely(id) {
 }
 
 function removeAllTrainsNow() {
-  // används vid “Rensa”
   for (const [id, m] of markers.entries()) {
     if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
     map.removeLayer(m.group);
     markers.delete(id);
   }
+
   lastPos.clear();
   lastBearing.clear();
   bearingEstablished.clear();
@@ -922,7 +865,7 @@ function removeAllTrainsNow() {
 }
 
 /* =========================================================
-   Upsert train (oförändrad logik)
+   Upsert train
 ========================================================= */
 function upsertTrain(v) {
   v.line = normalizeLine(v.line);
@@ -1029,21 +972,17 @@ function upsertTrain(v) {
     });
 
     if (pinnedTrainId === v.id && pinnedLabelMarker) {
-      pinnedLabelMarker.setIcon(
-        makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true)
-      );
+      pinnedLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, true));
     }
 
     if (hoverTrainId === v.id && hoverLabelMarker && pinnedTrainId !== v.id) {
-      hoverLabelMarker.setIcon(
-        makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, false)
-      );
+      hoverLabelMarker.setIcon(makeLabelIcon(v.line, buildLabelText(v), v.speedKmh, false));
     }
   }
 }
 
 /* =========================================================
-   refreshLive (endast tillagt filter + UI-updates)
+   refreshLive
 ========================================================= */
 async function refreshLive() {
   if (document.visibilityState !== "visible") return;
@@ -1056,10 +995,10 @@ async function refreshLive() {
   const data = await res.json();
   const seen = new Set();
 
-  // Om “visa inga” är aktivt, städa direkt och return
   if (isShowNone()) {
     removeAllTrainsNow();
     updateModeChipInactiveStates();
+    renderSubchips();
     return;
   }
 
@@ -1072,7 +1011,6 @@ async function refreshLive() {
     v.line = normalizeLine(v.line);
     knownLines.add(v.line);
 
-    // FILTER: om linjen inte är vald, ta bort ev marker och hoppa över
     if (!passesFilter(v)) {
       if (markers.has(v.id)) removeTrainCompletely(v.id);
       continue;
@@ -1082,7 +1020,6 @@ async function refreshLive() {
     upsertTrain(v);
   }
 
-  // Städa tåg som försvunnit från feeden
   for (const [id, m] of markers.entries()) {
     if (!seen.has(id)) {
       if (m.anim?.raf) cancelAnimationFrame(m.anim.raf);
@@ -1103,9 +1040,8 @@ async function refreshLive() {
     }
   }
 
-  // UI states
   updateModeChipInactiveStates();
-  renderSubchips(); // om panelen är öppen så uppdateras selected/inactive
+  renderSubchips();
 }
 
 /* =========================================================
