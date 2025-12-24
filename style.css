@@ -7,8 +7,19 @@ html, body { height: 100%; margin: 0; }
 }
 
 /* Pilar */
-.trainMarker svg {
-  overflow: visible;
+/* mjuk rotation när bearing uppdateras */
+.trainMarker{
+  transition: transform 160ms ease-out;
+}
+
+/* pop när tåg går från cirkel -> pil */
+@keyframes trainPopIn {
+  0%   { transform: scale(0.75); opacity: 0; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+.trainMarkerPopWrap{
+  animation: trainPopIn 220ms ease-out;
 }
 
 /* Cirkeln innan riktning finns */
