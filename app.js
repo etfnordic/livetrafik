@@ -317,15 +317,26 @@ function makeRailIcon(line, bearingDeg, pop = false) {
 }
 
 function makeBusIcon(bearingDeg) {
-  // samma form som tåg men mindre + mörk färg
-  const stroke = darkenHex(BUS_COLOR, 0.35);
   const rot = Number.isFinite(bearingDeg) ? bearingDeg + 90 : 0;
   const size = 22;
+
+  // Vit pil + mörk kant
+  const fill = "#FFFFFF";
+  const stroke = BUS_COLOR; // #020224
+  const strokeWidth = 5;    // tweak: 4–6 brukar vara snyggt
 
   const html = `
     <div style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
       <div style="transform: rotate(${rot}deg); width:${size}px; height:${size}px; display:flex; align-items:center; justify-content:center;">
-        ${railArrowSvg(BUS_COLOR, stroke, size)}
+        <svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M10 50 L92 10 L62 50 L92 90 Z"
+            fill="${fill}"
+            stroke="${stroke}"
+            stroke-width="${strokeWidth}"
+            stroke-linejoin="round"
+          />
+        </svg>
       </div>
     </div>
   `;
@@ -655,7 +666,7 @@ function ensureChipStylesOnce() {
       box-shadow: 0 8px 16px rgba(0,0,0,0.18);
     }
     .chipSearch{
-      width: 120px;
+      width: 80px;
       border:0;
       outline:0;
       background: transparent;
