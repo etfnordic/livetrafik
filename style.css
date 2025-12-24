@@ -50,7 +50,17 @@ html, body { height: 100%; margin: 0; }
   display: inline-block;
 }
 
-.trainLabelPinned{
-  box-shadow: 0 8px 18px rgba(0,0,0,.35);
+/* Hover: lite diskretare */
+.trainLabelHover{
+  box-shadow: 0 4px 10px rgba(0,0,0,.20);
 }
+
+/* Pinned: tydligare + glow */
+.trainLabelPinned{
+  box-shadow:
+    0 10px 22px rgba(0,0,0,.35),     /* lyft */
+    0 0 0 3px rgba(255,255,255,.55), /* ljus halo runt */
+    0 0 18px rgba(255,255,255,.28);  /* mjukt glow */
+}
+
 
