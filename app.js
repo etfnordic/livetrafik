@@ -480,31 +480,12 @@ function arrowSvg({ fill, stroke, strokeWidth = 5, dash = null, gradient = null,
   `;
 }
 
-function busArrowSvgNavStyle({ fill, stroke, strokeWidth = 6, dash = null, sizePx = 26 }) {
-  const dashAttr = dash ? `stroke-dasharray="${dash}"` : "";
-
+function busArrowFillOnly({ fill, sizePx = 26 }) {
   return `
     <svg width="${sizePx}" height="${sizePx}" viewBox="0 0 64 64"
          xmlns="http://www.w3.org/2000/svg"
-         shape-rendering="geometricPrecision">
-      
-      <!-- Side arcs -->
-      <path d="M11 26 C7 32, 7 32, 11 38"
-            fill="none"
-            stroke="${stroke}"
-            stroke-width="${strokeWidth}"
-            stroke-linecap="round"
-            ${dashAttr}
-      />
-      <path d="M53 26 C57 32, 57 32, 53 38"
-            fill="none"
-            stroke="${stroke}"
-            stroke-width="${strokeWidth}"
-            stroke-linecap="round"
-            ${dashAttr}
-      />
-
-      <!-- Main navigation arrow (clean geometry, no self-intersection) -->
+         shape-rendering="geometricPrecision"
+         style="display:block">
       <path
         d="
           M32 6
@@ -523,27 +504,22 @@ function busArrowSvgNavStyle({ fill, stroke, strokeWidth = 6, dash = null, sizeP
         "
         fill="${fill}"
         stroke="none"
+        fill-rule="evenodd"
       />
     </svg>
   `;
 }
 
 function makeBusIcon(bearingDeg, v) {
-  const rot = Number.isFinite(bearingDeg) ? bearingDeg + 90 : 0;
-  const size = 26; // lite större för att matcha referens-utseendet
+  const rot = Number.isFinite(bearingDeg) ? bearingDeg : 0;
+  const size = 26;
 
   const style = busColorStyleForVehicle(v);
 
   const html = `
     <div style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
       <div style="transform: rotate(${rot}deg); width:${size}px; height:${size}px; display:flex; align-items:center; justify-content:center;">
-        ${busArrowSvgNavStyle({
-          fill: style.iconFill,
-          stroke: style.iconStroke,
-          strokeWidth: 6,
-          dash: style.iconStrokeDash ?? null,
-          sizePx: size
-        })}
+        ${busArrowFillOnly({ fill: style.iconFill, sizePx: size })}
       </div>
     </div>
   `;
