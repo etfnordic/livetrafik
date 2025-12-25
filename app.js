@@ -227,7 +227,7 @@ const BUS_REPL_TOKEN = "__BUS_REPL__";
 const BUS_NEAR_TOKEN = "__BUS_NEAR__";
 
 /* Båt */
-const BOAT_COLOR = "#022B44"; // marinblå (huvudchip)
+const BOAT_COLOR = "#4A4AE0"; // marinblå (huvudchip)
 const BOAT_PENDEL_BG = "#007DB8"; // ljusblå
 const BOAT_WAX_YELLOW = "#F2C94C";
 const BOAT_WAX_BLUE = "#1E4ED8";
@@ -308,7 +308,7 @@ function boatStyleForVehicle(v) {
     const bg = `linear-gradient(90deg,${BOAT_WAX_YELLOW} 0%,${BOAT_WAX_YELLOW} 50%,${BOAT_WAX_BLUE} 50%,${BOAT_WAX_BLUE} 100%)`;
     return {
       bg,
-      labelText: "#0B1220",
+      labelText: "FFFFFF",
       iconType: "gradient",
       iconStroke: BOAT_COLOR,
     };
@@ -316,7 +316,7 @@ function boatStyleForVehicle(v) {
 
   return {
     bg: BOAT_PENDEL_BG,
-    labelText: "#0B1220",
+    labelText: "FFFFFF",
     iconType: "solid",
     iconFill: BOAT_PENDEL_BG,
     iconStroke: BOAT_COLOR,
