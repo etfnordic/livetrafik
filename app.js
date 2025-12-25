@@ -204,6 +204,12 @@ function normalizeDesc(raw) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function normalizeSelectionItem(x) {
+  const s = String(x ?? "").trim();
+  if (s.startsWith("__")) return s;
+  return normalizeLine(s);
+}
+
 /* ============================
    BUS + BOAT colors & category
 ============================ */
@@ -227,8 +233,8 @@ const BUS_REPL_TOKEN = "__BUS_REPL__";
 const BUS_NEAR_TOKEN = "__BUS_NEAR__";
 
 /* Båt */
-const BOAT_COLOR = "#4A4AE0"; // marinblå (huvudchip)
-const BOAT_PENDEL_BG = "#007DB8"; // ljusblå
+const BOAT_COLOR = "#4A4AE0";
+const BOAT_PENDEL_BG = "#007DB8";
 const BOAT_WAX_YELLOW = "#F2C94C";
 const BOAT_WAX_BLUE = "#1E4ED8";
 
@@ -238,18 +244,10 @@ const BOAT_WAX_TOKEN = "__BOAT_WAX__";
 
 function busCategoryTokenFromDesc(desc) {
   const d = normalizeDesc(desc);
-
-  // Närtrafiken
   if (d.includes("nartrafik")) return BUS_NEAR_TOKEN;
-
-  // Ersättning
   if (d.includes("ersatt") || d.includes("ersat")) return BUS_REPL_TOKEN;
-
-  // Blå buss
   if (d.includes("blabuss") || d.includes("bla buss") || d.includes("blue"))
     return BUS_BLUE_TOKEN;
-
-  // Fallback: default röd
   return BUS_RED_TOKEN;
 }
 
@@ -266,7 +264,6 @@ function busColorStyleForVehicle(v) {
     return { bg: BUS_REPL, labelText: "#FFFFFF", iconFill: BUS_REPL, iconStroke: BUS_COLOR };
 
   if (token === BUS_NEAR_TOKEN) {
-    // Vit + rödsträckad
     return {
       bg: BUS_NEAR_BG,
       labelText: BUS_NEAR_STROKE,
@@ -293,7 +290,6 @@ function boatCategoryTokenFromDesc(desc) {
   const d = normalizeDesc(desc);
   if (d.includes("pendelbat")) return BOAT_PENDEL_TOKEN;
   if (d.includes("waxholmsbolaget") || d.includes("waxholm")) return BOAT_WAX_TOKEN;
-  // okänd båt -> default pendelbåt-look
   return BOAT_PENDEL_TOKEN;
 }
 
@@ -308,7 +304,7 @@ function boatStyleForVehicle(v) {
     const bg = `linear-gradient(90deg,${BOAT_WAX_YELLOW} 0%,${BOAT_WAX_YELLOW} 50%,${BOAT_WAX_BLUE} 50%,${BOAT_WAX_BLUE} 100%)`;
     return {
       bg,
-      labelText: "FFFFFF",
+      labelText: "#FFFFFF",
       iconType: "gradient",
       iconStroke: BOAT_COLOR,
     };
@@ -316,7 +312,7 @@ function boatStyleForVehicle(v) {
 
   return {
     bg: BOAT_PENDEL_BG,
-    labelText: "FFFFFF",
+    labelText: "#FFFFFF",
     iconType: "solid",
     iconFill: BOAT_PENDEL_BG,
     iconStroke: BOAT_COLOR,
@@ -390,7 +386,6 @@ function fmtSpeed(speedKmh) {
    Icons
 ----------------------------- */
 
-// Rail arrow SVG
 function railArrowSvg(fillColor, strokeColor, sizePx = 24) {
   return `
     <svg width="${sizePx}" height="${sizePx}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -445,39 +440,6 @@ function makeRailIcon(line, bearingDeg, pop = false) {
     iconSize: [34, 34],
     iconAnchor: [17, 17],
   });
-}
-
-/* Buss/Boat-ikon: arrow SVG med valfri dash/gradient */
-function arrowSvg({ fill, stroke, strokeWidth = 5, dash = null, gradient = null, sizePx = 22 }) {
-  const dashAttr = dash ? `stroke-dasharray="${dash}"` : "";
-  const defs = gradient
-    ? `
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="${gradient.left}"/>
-          <stop offset="50%" stop-color="${gradient.left}"/>
-          <stop offset="50%" stop-color="${gradient.right}"/>
-          <stop offset="100%" stop-color="${gradient.right}"/>
-        </linearGradient>
-      </defs>
-    `
-    : "";
-
-  const fillAttr = gradient ? `url(#g)` : fill;
-
-  return `
-    <svg width="${sizePx}" height="${sizePx}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      ${defs}
-      <path
-        d="M10 50 L92 10 L62 50 L92 90 Z"
-        fill="${fillAttr}"
-        stroke="${stroke}"
-        stroke-width="${strokeWidth}"
-        stroke-linejoin="round"
-        ${dashAttr}
-      />
-    </svg>
-  `;
 }
 
 function busArrowFillOnly({ fill, sizePx = 26 }) {
@@ -656,6 +618,16 @@ function enrich(v) {
 
 const LS_KEY = "sl_live.selectedLines.v7";
 
+/**
+ * selectionMode:
+ * - "include": selectedLines = exakt vad som ska visas (tom => visa allt)
+ * - "exclude": selectedLines = vad som ska döljas (t.ex. klick på linje i "visa allt")
+ */
+const EXCLUDE_MODE_TOKEN = "__EXCLUDE_MODE__";
+const EXCLUDE_BUS_TOKEN = "__EXCL_BUS__";
+const EXCLUDE_BOAT_TOKEN = "__EXCL_BOAT__";
+
+let selectionMode = "include";
 let selectedLines = loadSelectedLines();
 
 const MODE_DEFS = [
@@ -684,101 +656,227 @@ const MODE_DEFS = [
   { key: "nockeby", label: "Nockebybanan", chipBg: colorForRailLine("12"), lines: ["12"] },
   { key: "city", label: "Spårväg City", chipBg: colorForRailLine("7"), lines: ["7"] },
 
-  // Buss (undermeny)
   { key: "bus", label: "Buss", chipBg: BUS_COLOR, lines: null },
-
-  // Båt (undermeny)
   { key: "boat", label: "Färja", chipBg: BOAT_COLOR, lines: null },
 ];
+
+// Hjälp: alla “tåg-linjer” för att avgöra om en vald siffra är ren rail
+const ALL_RAIL_LINES = new Set(
+  MODE_DEFS.flatMap((d) => (d.lines ? d.lines.map(normalizeLine) : []))
+);
 
 function loadSelectedLines() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    return new Set(Array.isArray(arr) ? arr.map(normalizeLine) : []);
+    if (!raw) {
+      selectionMode = "include";
+      return new Set(); // default: visa allt
+    }
+    const data = JSON.parse(raw);
+
+    // Backward compat: tidigare var detta alltid en array
+    if (Array.isArray(data)) {
+      if (data[0] === EXCLUDE_MODE_TOKEN) {
+        selectionMode = "exclude";
+        return new Set(data.slice(1).map(normalizeSelectionItem));
+      }
+      selectionMode = "include";
+      return new Set(data.map(normalizeSelectionItem));
+    }
+
+    // Om någon råkat spara annat -> fallback
+    selectionMode = "include";
+    return new Set();
   } catch {
+    selectionMode = "include";
     return new Set();
   }
 }
+
 function saveSelectedLines() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify([...selectedLines]));
+    const payload =
+      selectionMode === "exclude"
+        ? [EXCLUDE_MODE_TOKEN, ...selectedLines]
+        : [...selectedLines];
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
   } catch {}
 }
 
 function isShowNone() {
-  return selectedLines.has("__NONE__");
+  return selectionMode === "include" && selectedLines.has("__NONE__");
 }
+
 function setShowNone() {
+  selectionMode = "include";
   selectedLines = new Set(["__NONE__"]);
   saveSelectedLines();
 }
+
 function setShowAll() {
+  selectionMode = "include";
   selectedLines = new Set(); // tom = allt
+  saveSelectedLines();
+}
+
+function setShowTrainsOnly() {
+  // visa allt utom buss & färja
+  selectionMode = "exclude";
+  selectedLines = new Set([EXCLUDE_BUS_TOKEN, EXCLUDE_BOAT_TOKEN]);
   saveSelectedLines();
 }
 
 function isLineSelected(line) {
   const l = normalizeLine(line);
+
   if (isShowNone()) return false;
-  if (selectedLines.size === 0) return true;
-  return selectedLines.has(l);
+
+  if (selectionMode === "include") {
+    if (selectedLines.size === 0) return true; // visa allt
+    return selectedLines.has(l);
+  }
+
+  // exclude-mode: linje "vald" betyder egentligen att den INTE är exkluderad
+  return !selectedLines.has(l);
+}
+
+function anySelectedNonRailLineValue() {
+  for (const x of selectedLines) {
+    if (String(x).startsWith("__")) continue;
+    const l = normalizeLine(x);
+    if (!ALL_RAIL_LINES.has(l)) return true;
+  }
+  return false;
 }
 
 /**
  * Filter:
- * - __NONE__: inget
- * - empty set: allt
- * - non-empty:
- *    - spår: line i set
- *    - buss:
- *         om buss-kategorier valda -> matcha token via desc
- *         annars -> line i set
- *    - båt:
- *         om båt-kategorier valda -> matcha token via desc
- *         annars -> line i set
+ * include:
+ *  - __NONE__: inget
+ *  - empty set: allt
+ *  - non-empty: samma som tidigare (linjer + kategori-token)
+ *
+ * exclude:
+ *  - visa allt UTOM:
+ *    - exkluderade linjer
+ *    - exkluderad buss/färja via tokens
+ *    - exkluderade buss/färja-kategorier om användaren klickat dem i “visa allt”
  */
 function passesFilter(v) {
   if (isShowNone()) return false;
-  if (selectedLines.size === 0) return true;
 
   const l = normalizeLine(v.line);
 
-  if (v.type === 700) {
-    if (hasAnyBusCategoryToken()) {
-      const cat = busCategoryTokenForVehicle(v);
-      return selectedLines.has(cat);
+  if (selectionMode === "include") {
+    if (selectedLines.size === 0) return true;
+
+    if (v.type === 700) {
+      if (hasAnyBusCategoryToken()) {
+        const cat = busCategoryTokenForVehicle(v);
+        return selectedLines.has(cat);
+      }
+      return selectedLines.has(l);
     }
+
+    if (v.type === 1000) {
+      if (hasAnyBoatCategoryToken()) {
+        const cat = boatCategoryTokenForVehicle(v);
+        return selectedLines.has(cat);
+      }
+      return selectedLines.has(l);
+    }
+
     return selectedLines.has(l);
+  }
+
+  // exclude-mode
+  if (v.type === 700) {
+    if (selectedLines.has(EXCLUDE_BUS_TOKEN)) return false;
+
+    // om man exkluderar busskategorier i “visa allt”
+    if (
+      selectedLines.has(BUS_RED_TOKEN) ||
+      selectedLines.has(BUS_BLUE_TOKEN) ||
+      selectedLines.has(BUS_REPL_TOKEN) ||
+      selectedLines.has(BUS_NEAR_TOKEN)
+    ) {
+      const cat = busCategoryTokenForVehicle(v);
+      if (selectedLines.has(cat)) return false;
+      return true;
+    }
+
+    // annars exkludera via linjenummer
+    if (selectedLines.has(l)) return false;
+    return true;
   }
 
   if (v.type === 1000) {
-    if (hasAnyBoatCategoryToken()) {
+    if (selectedLines.has(EXCLUDE_BOAT_TOKEN)) return false;
+
+    if (selectedLines.has(BOAT_PENDEL_TOKEN) || selectedLines.has(BOAT_WAX_TOKEN)) {
       const cat = boatCategoryTokenForVehicle(v);
-      return selectedLines.has(cat);
+      if (selectedLines.has(cat)) return false;
+      return true;
     }
-    return selectedLines.has(l);
+
+    if (selectedLines.has(l)) return false;
+    return true;
   }
 
-  return selectedLines.has(l);
+  // tåg/spår
+  return !selectedLines.has(l);
 }
 
+/**
+ * NY LOGIK:
+ * - Om man är i “visa allt” (include + empty set) och klickar en linje => växla till exclude och dölj den linjen
+ * - Om man i include-mode väljer sista linjen bort => tillbaka till “visa allt”
+ */
 function toggleRailLineSelection(line) {
   const l = normalizeLine(line);
   if (!l) return;
 
-  if (isShowNone() || selectedLines.size === 0) {
+  if (isShowNone()) {
+    // från "rensa": börja inkludera
+    selectionMode = "include";
     selectedLines = new Set([l]);
     saveSelectedLines();
     return;
   }
 
+  if (selectionMode === "include") {
+    if (selectedLines.size === 0) {
+      // visa allt -> klick betyder "dölj"
+      selectionMode = "exclude";
+      selectedLines = new Set([l]);
+      saveSelectedLines();
+      return;
+    }
+
+    if (selectedLines.has(l)) selectedLines.delete(l);
+    else selectedLines.add(l);
+
+    if (selectedLines.size === 0) {
+      // om inget valt längre: tillbaka till visa allt (inte "rensa")
+      setShowAll();
+      return;
+    }
+
+    saveSelectedLines();
+    return;
+  }
+
+  // exclude-mode: toggle exkluderad linje
   if (selectedLines.has(l)) selectedLines.delete(l);
   else selectedLines.add(l);
 
-  if (selectedLines.size === 0) {
-    setShowNone();
+  // om inga exkluderingar kvar alls -> visa allt
+  const hasAnything =
+    selectedLines.size > 0 &&
+    !(selectedLines.size === 0);
+
+  if (!hasAnything || selectedLines.size === 0) {
+    setShowAll();
     return;
   }
 
@@ -786,7 +884,16 @@ function toggleRailLineSelection(line) {
 }
 
 function toggleBusCategoryToken(token) {
-  if (selectedLines.size === 0 || isShowNone()) {
+  if (isShowNone()) {
+    selectionMode = "include";
+    selectedLines = new Set([token]);
+    saveSelectedLines();
+    return;
+  }
+
+  if (selectionMode === "include" && selectedLines.size === 0) {
+    // visa allt -> klick betyder "dölj denna busskategori"
+    selectionMode = "exclude";
     selectedLines = new Set([token]);
     saveSelectedLines();
     return;
@@ -795,8 +902,13 @@ function toggleBusCategoryToken(token) {
   if (selectedLines.has(token)) selectedLines.delete(token);
   else selectedLines.add(token);
 
-  if (selectedLines.size === 0) {
-    setShowNone();
+  if (selectionMode === "include" && selectedLines.size === 0) {
+    setShowAll();
+    return;
+  }
+
+  if (selectionMode === "exclude" && selectedLines.size === 0) {
+    setShowAll();
     return;
   }
 
@@ -804,7 +916,16 @@ function toggleBusCategoryToken(token) {
 }
 
 function toggleBoatCategoryToken(token) {
-  if (selectedLines.size === 0 || isShowNone()) {
+  if (isShowNone()) {
+    selectionMode = "include";
+    selectedLines = new Set([token]);
+    saveSelectedLines();
+    return;
+  }
+
+  if (selectionMode === "include" && selectedLines.size === 0) {
+    // visa allt -> klick betyder "dölj denna färjekategori"
+    selectionMode = "exclude";
     selectedLines = new Set([token]);
     saveSelectedLines();
     return;
@@ -813,8 +934,13 @@ function toggleBoatCategoryToken(token) {
   if (selectedLines.has(token)) selectedLines.delete(token);
   else selectedLines.add(token);
 
-  if (selectedLines.size === 0) {
-    setShowNone();
+  if (selectionMode === "include" && selectedLines.size === 0) {
+    setShowAll();
+    return;
+  }
+
+  if (selectionMode === "exclude" && selectedLines.size === 0) {
+    setShowAll();
     return;
   }
 
@@ -824,11 +950,13 @@ function toggleBoatCategoryToken(token) {
 function setSelectionFromSearch(raw) {
   const parts = String(raw ?? "")
     .split(",")
-    .map((s) => normalizeLine(s))
-    .filter((s) => s && s !== "__NONE__");
+    .map((s) => normalizeSelectionItem(s))
+    .filter((s) => s && s !== "__NONE__" && !String(s).startsWith("__"));
 
   if (parts.length === 0) return;
 
+  // Sök ska alltid vara “include-exakt”
+  selectionMode = "include";
   selectedLines = new Set(parts);
   saveSelectedLines();
 }
@@ -1062,6 +1190,15 @@ function renderTopRow() {
     })
   );
 
+  // NY: Visa tåg (allt utom buss och färja)
+  rowEl.appendChild(
+    makeMiniButton("Visa tåg", () => {
+      setShowTrainsOnly();
+      renderSubchips();
+      refreshLive().catch(console.error);
+    })
+  );
+
   rowEl.appendChild(
     makeMiniButton("Rensa", () => {
       setShowNone();
@@ -1115,19 +1252,16 @@ function updateModeChipInactiveStates() {
 
     if (key === "bus") {
       let active = true;
+
       if (isShowNone()) active = false;
-      else if (selectedLines.size === 0) active = true;
-      else {
-        active = hasAnyBusCategoryToken();
-        if (!active) {
-          for (const x of selectedLines) {
-            if (x !== "__NONE__") {
-              active = true;
-              break;
-            }
-          }
-        }
+      else if (selectionMode === "include") {
+        if (selectedLines.size === 0) active = true;
+        else active = hasAnyBusCategoryToken() || anySelectedNonRailLineValue();
+      } else {
+        // exclude-mode: aktiv om buss inte är exkluderad
+        active = !selectedLines.has(EXCLUDE_BUS_TOKEN);
       }
+
       btn.classList.toggle("is-inactive", !active);
       btn.classList.toggle("is-activeMode", subPanelModeKey === "bus");
       continue;
@@ -1135,19 +1269,15 @@ function updateModeChipInactiveStates() {
 
     if (key === "boat") {
       let active = true;
+
       if (isShowNone()) active = false;
-      else if (selectedLines.size === 0) active = true;
-      else {
-        active = hasAnyBoatCategoryToken();
-        if (!active) {
-          for (const x of selectedLines) {
-            if (x !== "__NONE__") {
-              active = true;
-              break;
-            }
-          }
-        }
+      else if (selectionMode === "include") {
+        if (selectedLines.size === 0) active = true;
+        else active = hasAnyBoatCategoryToken() || anySelectedNonRailLineValue();
+      } else {
+        active = !selectedLines.has(EXCLUDE_BOAT_TOKEN);
       }
+
       btn.classList.toggle("is-inactive", !active);
       btn.classList.toggle("is-activeMode", subPanelModeKey === "boat");
       continue;
@@ -1159,7 +1289,7 @@ function updateModeChipInactiveStates() {
     let anySelected = false;
 
     if (isShowNone()) anySelected = false;
-    else if (selectedLines.size === 0) anySelected = true;
+    else if (selectionMode === "include" && selectedLines.size === 0) anySelected = true;
     else {
       for (const l of def.lines) {
         if (isLineSelected(l)) {
@@ -1214,7 +1344,6 @@ function renderSubchips() {
     return;
   }
 
-  // Buss undermeny
   if (subPanelModeKey === "bus") {
     const defs = [
       { label: "Röd", token: BUS_RED_TOKEN, bg: BUS_RED, faceClass: "" },
@@ -1237,6 +1366,7 @@ function renderSubchips() {
         },
       });
 
+      // i include-mode: "unselected" betyder inte valt. I exclude-mode: token betyder "dölj" så vi visar den som vald när token finns.
       btn.classList.toggle("is-unselected", !selectedLines.has(d.token));
       subPanelEl.appendChild(btn);
     }
@@ -1245,7 +1375,6 @@ function renderSubchips() {
     return;
   }
 
-  // Båt undermeny
   if (subPanelModeKey === "boat") {
     const defs = [
       { label: "Pendelbåt", token: BOAT_PENDEL_TOKEN, bg: BOAT_PENDEL_BG, faceClass: "" },
@@ -1279,7 +1408,6 @@ function renderSubchips() {
     return;
   }
 
-  // Spår undermeny
   const def = MODE_DEFS.find((d) => d.key === subPanelModeKey);
   if (!def || !def.lines) return;
 
@@ -1297,7 +1425,13 @@ function renderSubchips() {
       },
     });
 
-    btn.classList.toggle("is-unselected", !isLineSelected(line));
+    // i exclude-mode är "unselected" = linjen är exkluderad (dold)
+    if (selectionMode === "exclude") {
+      btn.classList.toggle("is-unselected", selectedLines.has(line));
+    } else {
+      btn.classList.toggle("is-unselected", !isLineSelected(line));
+    }
+
     subPanelEl.appendChild(btn);
   }
 
