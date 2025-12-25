@@ -558,14 +558,6 @@ function makeBusIcon(bearingDeg, v) {
   });
 }
 
-  return L.divIcon({
-    className: "busIconWrap",
-    html,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
-}
-
 function makeBoatIcon(bearingDeg, v) {
   const rot = Number.isFinite(bearingDeg) ? bearingDeg + 90 : 0;
   const size = 22;
