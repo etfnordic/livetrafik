@@ -484,14 +484,16 @@ function busArrowSvgNavStyle({ fill, stroke, strokeWidth = 6, dash = null, sizeP
   const dashAttr = dash ? `stroke-dasharray="${dash}"` : "";
 
   return `
-    <svg width="${sizePx}" height="${sizePx}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <!-- Side arcs (ONLY stroke) -->
+    <svg width="${sizePx}" height="${sizePx}" viewBox="0 0 64 64"
+         xmlns="http://www.w3.org/2000/svg"
+         shape-rendering="geometricPrecision">
+      
+      <!-- Side arcs -->
       <path d="M11 26 C7 32, 7 32, 11 38"
             fill="none"
             stroke="${stroke}"
             stroke-width="${strokeWidth}"
             stroke-linecap="round"
-            stroke-linejoin="round"
             ${dashAttr}
       />
       <path d="M53 26 C57 32, 57 32, 53 38"
@@ -499,26 +501,24 @@ function busArrowSvgNavStyle({ fill, stroke, strokeWidth = 6, dash = null, sizeP
             stroke="${stroke}"
             stroke-width="${strokeWidth}"
             stroke-linecap="round"
-            stroke-linejoin="round"
             ${dashAttr}
       />
 
-      <!-- Main soft navigation arrow (NO stroke -> removes black artifacts) -->
+      <!-- Main navigation arrow (clean geometry, no self-intersection) -->
       <path
         d="
           M32 6
-          C29.8 6 28.0 7.2 26.8 9.3
-          L16.2 28.2
-          C15.1 30.2 15.6 32.7 17.4 34.1
-          C19.2 35.5 21.9 35.3 23.5 33.6
-          L28.5 28.2
-          C29.6 27.0 31.0 26.4 32.5 26.4
-          C34.0 26.4 35.4 27.0 36.5 28.2
-          L41.5 33.6
-          C43.1 35.3 45.8 35.5 47.6 34.1
-          C49.4 32.7 49.9 30.2 48.8 28.2
-          L38.2 9.3
-          C37.0 7.2 35.2 6 32.9 6
+          C29.5 6 27.6 7.4 26.3 9.7
+          L15.8 29
+          C14.8 30.8 15.2 33.0 16.8 34.2
+          C18.4 35.4 20.8 35.1 22.3 33.5
+          L30.2 25.2
+          C31.2 24.2 32.8 24.2 33.8 25.2
+          L41.7 33.5
+          C43.2 35.1 45.6 35.4 47.2 34.2
+          C48.8 33.0 49.2 30.8 48.2 29
+          L37.7 9.7
+          C36.4 7.4 34.5 6 32 6
           Z
         "
         fill="${fill}"
