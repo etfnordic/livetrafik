@@ -532,31 +532,61 @@ function makeBusIcon(bearingDeg, v) {
   });
 }
 
+function boatChevronSvg({ fill, sizePx = 24, gradient = null }) {
+  const defs = gradient
+    ? `
+      <defs>
+        <linearGradient id="boatGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="${gradient.left}"/>
+          <stop offset="50%" stop-color="${gradient.left}"/>
+          <stop offset="50%" stop-color="${gradient.right}"/>
+          <stop offset="100%" stop-color="${gradient.right}"/>
+        </linearGradient>
+      </defs>
+    `
+    : "";
+
+  const strokeAttr = gradient ? "url(#boatGrad)" : fill;
+
+  return `
+    <svg width="${sizePx}" height="${sizePx}" viewBox="0 0 64 64"
+         xmlns="http://www.w3.org/2000/svg"
+         shape-rendering="geometricPrecision"
+         style="display:block">
+      ${defs}
+      <path
+        d="M22 14 L44 32 L22 50"
+        fill="none"
+        stroke="${strokeAttr}"
+        stroke-width="14"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  `;
+}
+
 function makeBoatIcon(bearingDeg, v) {
   const rot = Number.isFinite(bearingDeg) ? bearingDeg + 90 : 0;
-  const size = 22;
+  const size = 24;
 
   const style = boatStyleForVehicle(v);
 
+  const svg =
+    style.iconType === "gradient"
+      ? boatChevronSvg({
+          sizePx: size,
+          gradient: { left: BOAT_WAX_YELLOW, right: BOAT_WAX_BLUE },
+        })
+      : boatChevronSvg({
+          sizePx: size,
+          fill: style.iconFill ?? BOAT_PENDEL_BG,
+        });
+
   const html = `
-    <div style="filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));">
+    <div style="filter: drop-shadow(0 3px 4px rgba(0,0,0,.45));">
       <div style="transform: rotate(${rot}deg); width:${size}px; height:${size}px; display:flex; align-items:center; justify-content:center;">
-        ${
-          style.iconType === "gradient"
-            ? arrowSvg({
-                fill: BOAT_WAX_BLUE,
-                stroke: style.iconStroke ?? BOAT_COLOR,
-                strokeWidth: 5,
-                gradient: { left: BOAT_WAX_YELLOW, right: BOAT_WAX_BLUE },
-                sizePx: size,
-              })
-            : arrowSvg({
-                fill: style.iconFill ?? BOAT_PENDEL_BG,
-                stroke: style.iconStroke ?? BOAT_COLOR,
-                strokeWidth: 5,
-                sizePx: size,
-              })
-        }
+        ${svg}
       </div>
     </div>
   `;
